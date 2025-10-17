@@ -1,0 +1,23 @@
+llm: # vllm
+  api_type: "open_llm" # open_llm or openai
+  base_url: 'http://localhost:8000/v1' #v1
+  model: "meta/llama3.1-8B-instruct" #llama3.1-8B-instruct in LLaMA-Factory / /data/zhy/llama3-8B
+  api_key: "ANY_THING_IS_OKAY"
+  max_concurrent: 20
+
+embedding:
+  api_type: "hf"  # hf or  ollama / openai.
+  # base_url: "https://cfcus02.opapi.win/v1"  # or forward url / other llm url
+  # api_key: "YOUR_API_KEY"
+  model: "./Embedding_Model/bge-m3"
+  cache_dir: ""
+  dimensions: 1024
+  max_token_size: 8192
+  embed_batch_size: 16
+  embedding_func_max_async: 16
+ 
+data_root:  "./Data" # Root directory for data
+
+working_dir: ./Result/HyGRAG/llama3.1-8B-instruct/  #./result/staticqa/ # Result directory for the experiment HKGraphTreeLSH
+exp_name:  StaticQA_experiment  #StaticQA_experiment_new-claude-prompt #StaticQA_experiment_freecc_with-original-prompt  # Experiment name
+#   

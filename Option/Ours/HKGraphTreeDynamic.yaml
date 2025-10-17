@@ -1,0 +1,164 @@
+################################# HK Graph Tree Dynamic Configuration #################################
+# HKGraphTree增量更新版本配置文件
+# 基于EraRAG TreeGraphDynamic的增量更新机制
+
+# 基础配置 (Basic Configuration)
+use_entities_vdb: False                     # 是否启用实体向量数据库，用于实体相似性检索
+use_relations_vdb: False                   # 是否启用关系向量数据库，高级检索时可设为True
+llm_model_max_token_size: 32768           # LLM模型最大token限制，控制输入文本长度
+use_entity_link_chunk: True               # 启用实体-块链接映射，支持HK图的实体溯源功能
+enable_graph_augmentation: False          # 启用图增强，通过实体相似性添加额外连边
+
+# 数据配置 (Data Configuration)
+index_name: hk_graph_tree_dynamic         # 索引名称，用于标识增量更新实验
+vdb_type: faiss                          # 向量数据库类型
+token_model: gpt-3.5-turbo
+
+# 文档分块配置 (Chunk Configuration)
+chunk:
+  chunk_token_size: 1200                   # 每个文档块的token大小，影响图构建的粒度
+  chunk_overlap_token_size: 100            # 相邻文档块之间的重叠token数，确保信息连续性
+  chunk_method: chunking_by_token_size     # 分块方法：基于token数量进行分块
+
+# 图构建配置 (Graph Configuration)
+graph:
+    # 图构建基础设置
+    enable_entity_description: True          # 启用实体描述生成，增强实体语义表示
+    graph_type: hk_graph_tree_dynamic        # 图类型：hk_graph_tree_dynamic - 增量更新的层次化混合知识图
+    force: False                             # 是否强制重建图，False时会复用已有图
+    
+    # 增量更新配置 (Incremental Update Configuration)
+    enable_incremental_update: True          # 启用增量更新功能
+    incremental_batch_size: 10               # 增量更新批处理大小
+    max_affected_ratio: 0.99                  # 最大受影响节点比例，超过此比例将执行全量重构
+    incremental_force_rebuild_threshold: 0.99 # 强制重构阈值
+    enable_cross_chunk_connections: True     # 启用新chunk与现有chunk之间的连接（推荐开启以保证图完整性）
+    
+    # HK图特定配置 (HK Graph Specific Configurations)
+    # 实体关系抽取设置
+    extract_two_step: True                   # 启用两步抽取：先NER命名实体识别，再OpenIE开放信息抽取
+    max_gleaning: 1                          # 最大信息收集轮数，控制抽取迭代次数
+    enable_entity_type: True                 # 启用实体类型标注，如人名、地名、组织等
+    enable_edge_description: True            # 启用关系边的描述生成
+    enable_edge_name: True                   # 启用关系边的名称标注
+    
+    # 段落级实体链接设置
+    use_wat_linking: False                   # 是否使用WAT实体链接系统连接到Wikipedia
+    prior_prob: 0.8                         # 实体链接的最小概率阈值，高于此值才建立链接
+    
+    # Cleora嵌入配置 (Cleora Embedding Configuration)
+    cleora_dim: 1024                         # Cleora嵌入维度
+    cleora_iterations: 2                     # Cleora迭代次数，控制邻居信息聚合深度
+    
+    # LSH聚类配置 (LSH Clustering Configuration) - 关键：固定超平面确保一致性
+    lsh_num_hyperplanes: 16                  # LSH超平面数量，影响哈希精度
+    lsh_min_cluster_size: 5                  # LSH聚类最小大小 5
+    lsh_max_cluster_size: 50                 # LSH聚类最大大小 50
+    
+    # 层次化配置 (Hierarchical Configuration)
+    max_hierarchy_levels: 4                  # 最大层次级别
+    community_summary_length: 300           # 社区摘要最大长度
+    max_concurrent_summaries: 35            # 最大并发摘要生成数量
+    random_seed: 42                          # 随机种子，确保结果可复现（重要：增量更新一致性）
+    
+    # 通用设置
+    summary_max_tokens: 500                  # 实体/关系摘要的最大token数
+    llm_model_max_token_size: 32768         # 图构建阶段LLM的最大token限制
+    
+    # Chunk-Chunk连接设置
+    shared_entity_threshold: 3              # 建立chunk-chunk连接所需的最小共享实体数量
+    
+    # FAISS向量索引配置 (FAISS Vector Index Configuration)
+    faiss_index_type: HNSW                  # FAISS索引类型
+    faiss_hnsw_m: 64                        # HNSW算法M参数，控制连接度
+    faiss_hnsw_ef_construction: 500         # HNSW构建时的efConstruction参数
+    faiss_hnsw_ef_search: 200               # HNSW搜索时的efSearch参数
+    faiss_index_path: "./faiss_index_dynamic/th3_0.7_debug/multihop-rag"  # FAISS索引保存路径
+
+# 检索器配置 (Retrieval Configuration)
+retriever:
+    query_type: hk_tree                      # 检索类型：使用HKGraphTree层次化检索方法
+    
+    # 层次化检索设置 (Hierarchical Retrieval Settings)
+    enable_hierarchical_retrieval: True     # 启用层次化检索
+    hierarchy_search_levels: 3              # 搜索的层次级别数
+    community_boost_factor: 1.2             # 社区节点权重提升因子
+    hk_tree_retrieval_method: hk_tree_flat_search  # 检索策略
+    
+    # 树搜索特定设置 (Tree Search Specific Settings)
+    top_k: 5                                # 每层返回的顶部结果数量
+    max_communities_per_level: 5            # 每层最大社区数量
+    max_expansion_depth: 3                   # 最大展开深度
+    community_relevance_threshold: 0.3      # 社区相关性阈值
+    
+    # PPR兼容设置（用于回退）
+    enable_local: False                      # 是否启用局部检索模式
+    use_entity_similarity_for_ppr: False    # PPR中是否使用实体相似性权重
+    top_k_entity_for_ppr: 8                 # PPR算法中的种子实体数量
+    node_specificity: True                   # 启用节点特异性权重
+    damping: 0.1                            # PPR阻尼因子
+    
+    # 上下文token限制
+    max_token_for_local_context: 4000       # 局部上下文的最大token数
+    max_token_for_global_context: 8000      # 全局上下文的最大token数
+    
+    # 实体和关系的token限制
+    entities_max_tokens: 2000               # 实体信息的最大token数
+    relationships_max_tokens: 2000          # 关系信息的最大token数
+
+# 查询配置 (Query Configuration)
+query: 
+    query_type: qa                           # 查询类型：qa(问答) 或 summary(摘要)
+    only_need_context: False                 # 是否只返回上下文，不进行LLM生成
+    level: 2                                 # 查询复杂度级别，影响检索深度
+    top_k: 5                                # 候选结果数量
+    k_nei: 3                                # k邻居数量，用于图遍历
+    
+    # 层次化查询设置 (Hierarchical Query Settings)
+    enable_community_context: True          # 启用社区上下文
+    community_context_levels: 3             # 社区上下文层级数
+    hk_tree_retrieval_method: hk_tree_flat_search  # 检索策略配置
+    enable_entity_extraction: True          # 启用查询实体提取
+    
+    # 树搜索查询设置 (Tree Search Query Settings)
+    max_tree_search_depth: 3                # 最大树搜索深度
+    tree_search_breadth: 5                  # 树搜索广度（每层节点数）
+    
+    # 上下文设置 (Context Settings)
+    retrieve_top_k: 5                        # 最终检索返回的结果数量
+    naive_max_token_for_text_unit: 12000     # 朴素检索模式下文本单元的最大token数
+    local_max_token_for_text_unit: 4000      # 局部检索模式下文本单元的最大token数
+    max_token_for_text_unit: 4000           # 标准检索模式下文本单元的最大token数
+    
+    entities_max_tokens: 2000               # 查询阶段实体信息的最大token数
+    relationships_max_tokens: 2000          # 查询阶段关系信息的最大token数
+    
+    # 文档显示控制设置 (Document Display Control Settings)
+    max_document_display_length: 8000       # 允许完整显示的文档最大长度
+    max_smart_truncate_length: 8000         # 启用智能截断的阈值长度
+    truncate_head_chars: 4000                # 截断时保留的开头字符数
+    truncate_tail_chars: 3000                # 截断时保留的结尾字符数
+
+# 增量更新特定配置 (Incremental Update Specific Configuration)
+incremental:
+    # 增量更新策略
+    update_strategy: "smart"                 # 更新策略: "smart", "force", "conservative"
+    enable_signature_verification: True     # 启用签名验证，确保LSH一致性
+    enable_affected_tracking: True          # 启用受影响节点追踪
+    
+    # 性能优化
+    parallel_update_workers: 4              # 并行更新工作线程数
+    embedding_batch_size: 32                # 嵌入计算批处理大小
+    
+    # 质量控制
+    similarity_threshold_for_merge: 0.7     # 合并相似节点的阈值
+    min_new_nodes_for_clustering: 5         # 触发新聚类的最小新节点数
+    
+    # 备份和恢复
+    enable_backup: True                      # 启用增量更新前的备份
+    max_backup_versions: 3                  # 最大备份版本数
+    
+    # 调试和监控
+    enable_update_logging: True             # 启用详细的更新日志
+    log_affected_nodes: True                # 记录受影响的节点
+    enable_performance_monitoring: True     # 启用性能监控

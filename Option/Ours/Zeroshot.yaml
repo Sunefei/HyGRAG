@@ -1,0 +1,57 @@
+################################# Zero-shot配置 #################################
+# 基本配置 - 禁用所有RAG相关功能
+use_entities_vdb: False
+use_relations_vdb: False
+use_entity_link_chunk: False
+enable_graph_augmentation: False
+
+# 数据配置
+index_name: zero_shot
+vdb_type: faiss
+
+# 分块配置（Zero-shot模式下不使用）
+chunk:
+  chunk_token_size: 1200
+  chunk_overlap_token_size: 100
+  token_model: gpt-3.5-turbo
+  chunk_method: chunking_by_token_size
+
+# 图配置（Zero-shot模式下不使用）
+graph:
+  enable_edge_keywords: False
+  graph_type: er_graph
+  force: False
+  extract_two_step: True
+  max_gleaning: 1
+  enable_entity_description: False
+  enable_entity_type: False
+  enable_edge_description: False
+  enable_edge_name: True
+  prior_prob: 0.8
+  similarity_max: 1.0
+
+# 检索配置（Zero-shot模式下不使用）
+retriever:
+  query_type: ppr
+  enable_local: False
+  use_entity_similarity_for_ppr: False
+  top_k_entity_for_ppr: 8
+  node_specificity: True
+  damping: 0.1
+  top_k: 5
+
+# 查询配置（Zero-shot模式）
+query:
+  query_type: qa
+  only_need_context: False
+  enable_hybrid_query: False
+  augmentation_ppr: False
+  level: 2
+  community_information: False
+  retrieve_top_k: 0
+  naive_max_token_for_text_unit: 0
+  local_max_token_for_text_unit: 0
+  max_token_for_text_unit: 0
+  entities_max_tokens: 0
+  relationships_max_tokens: 0
+  max_ir_steps: 0
