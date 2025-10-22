@@ -53,10 +53,6 @@ class GraphFactory():
         return PassageGraph(config.graph, **kwargs)
     
     @staticmethod
-    def _create_hk_graph(config, **kwargs):
-        return HKGraph(config.graph, **kwargs)
-    
-    @staticmethod
     def _create_hk_graph_tree(config, **kwargs):
         return HKGraphTree(config.graph, config, **kwargs)
     

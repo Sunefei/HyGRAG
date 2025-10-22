@@ -34,21 +34,6 @@ from tqdm import tqdm
 
 
 class HKGraphTree(BaseGraph):
-    """
-    HKGraphTree: Hierarchical HK Graph with Cleora Embeddings and LSH Clustering
-    
-    This implementation treats the base HKGraph as a homogeneous graph and applies:
-    1. Cleora method to aggregate neighbor information for graph embeddings
-    2. LSH clustering to create upper-level community nodes
-    3. Iterative hierarchical clustering with community summarization
-    
-    Key Features:
-    - Base layer: HKGraph with entities, relationships, and chunks
-    - Embedding layer: Cleora-based node embeddings
-    - Clustering layer: LSH-based hierarchical communities
-    - Summarization: LLM-generated community summaries
-    - Persistence: Save/load hierarchy data for offline retrieval
-    """
 
     def __init__(self, config, embed_config, llm, encoder, **kwargs):
         super().__init__(config, llm, encoder)
@@ -113,21 +98,15 @@ class HKGraphTree(BaseGraph):
         logger.info(f"🔧 FAISS config: {self.faiss_index_type}, M={self.faiss_hnsw_m}, ef_construction={self.faiss_hnsw_ef_construction}")
 
     async def _load_graph(self, force: bool = False) -> bool:
-        """
-        重写_load_graph方法，同时加载基础图和层次结构数据
-        确保在查询阶段也能正确加载层次结构
-        """
-        # 首先加载基础图
+
         base_loaded = await self._graph.load_graph(force)
         
         if not base_loaded:
             logger.info("Base graph not loaded, will need to build from scratch")
             return False
-        
-        # 如果基础图加载成功，尝试加载层次结构
+
         hierarchy_loaded = await self._load_hierarchy_from_storage()
         
-        # 尝试加载FAISS索引
         faiss_loaded = await self._load_faiss_indexes()
         
         if hierarchy_loaded and faiss_loaded:
@@ -138,19 +117,16 @@ class HKGraphTree(BaseGraph):
             return base_loaded
         else:
             logger.warning("⚠️ Base graph loaded but hierarchy data missing - may need to rebuild")
-            # 即使层次结构加载失败，如果基础图存在，我们也返回True
-            # 这样可以避免重新构建整个图，只需要重新构建层次结构
             return base_loaded
 
     async def _load_hierarchy_from_storage(self) -> bool:
-        """从存储中加载层次结构数据"""
+
         try:
             hierarchy_data = self._graph.hierarchy_data
             if hierarchy_data is None:
                 logger.info("No hierarchy data found in storage")
                 return False
             
-            # 恢复层次结构数据
             self.node_embeddings = hierarchy_data.get('node_embeddings', {})
             self.node_text_embeddings = hierarchy_data.get('node_text_embeddings', {})
             self.hierarchy_levels = hierarchy_data.get('hierarchy_levels', {})
@@ -166,9 +142,9 @@ class HKGraphTree(BaseGraph):
             return False
 
     async def _save_hierarchy_to_storage(self, force: bool = False):
-        """保存层次结构数据到存储"""
+
         try:
-            # 准备层次结构数据
+
             hierarchy_data = {
                 'node_embeddings': self.node_embeddings,
                 'node_text_embeddings': self.node_text_embeddings,
@@ -176,14 +152,13 @@ class HKGraphTree(BaseGraph):
                 'community_summaries': self.community_summaries,
                 'community_children': self.community_children,
                 'community_parents': self.community_parents,
-                'config': {  # 保存一些配置信息用于验证
+                'config': {  
                     'cleora_dim': self.cleora_dim,
                     'max_hierarchy_levels': self.max_hierarchy_levels,
                     'random_seed': self.random_seed
                 }
             }
-            
-            # 保存到存储
+
             await self._graph.persist_hierarchy(hierarchy_data, force=force)
             logger.info(f"✅ Saved hierarchy data with {len(self.hierarchy_levels)} levels")
             
@@ -192,14 +167,10 @@ class HKGraphTree(BaseGraph):
             raise
 
     async def _build_graph(self, chunk_list: List[Any]):
-        """
-        Build the hierarchical HK graph with Cleora embeddings and LSH clustering.
-        Note: 层次结构加载已在_load_graph中处理，此方法专注于构建过程
-        """
+
         try:
             logger.info("Building Hierarchical HK Graph with Cleora + LSH")
             
-            # 检查是否已有层次结构（可能在_load_graph中已加载）
             if self.hierarchy_levels and len(self.hierarchy_levels) > 0:
                 logger.info("✅ Hierarchy already loaded, skipping rebuild")
                 return
@@ -704,7 +675,7 @@ class HKGraphTree(BaseGraph):
             
         if len(current_level_nodes) <= self.lsh_min_cluster_size:
             logger.warning(f"⚠️ Only {len(current_level_nodes)} nodes available, less than min cluster size {self.lsh_min_cluster_size}")
-            # 为小数据集创建一个基本的层次结构
+
             if len(current_level_nodes) >= 2:
                 logger.info("🔧 Creating basic hierarchy for small dataset")
                 basic_community = {
@@ -713,8 +684,7 @@ class HKGraphTree(BaseGraph):
                     'level': 0
                 }
                 self.hierarchy_levels[0] = [basic_community]
-                
-                # 生成基本摘要
+
                 try:
                     await self._generate_community_summary_and_embedding('COMMUNITY_L0_C0', current_level_nodes, 0)
                     logger.info("✅ Created basic hierarchy for small dataset")
@@ -777,15 +747,6 @@ class HKGraphTree(BaseGraph):
                 else:
                     logger.info(f"  ⚠️ Cluster {cluster_id} too small ({len(cluster_nodes)} < {self.lsh_min_cluster_size}), skipping")
             
-            # Print community filtering statistics
-            if valid_communities:
-                accepted_count = len(valid_communities)
-                total_count = len(clusters)
-                rejected_count = total_count - accepted_count
-                logger.info(f"📋 第 {level} 层社区过滤统计:")
-                logger.info(f"   ✅ 接受的聚类: {accepted_count}/{total_count} ({accepted_count/total_count*100:.1f}%)")
-                logger.info(f"   ❌ 拒绝的聚类: {rejected_count}/{total_count} ({rejected_count/total_count*100:.1f}%) - 低于最小大小阈值")
-            
             # Second pass: Generate community summaries and embeddings concurrently with controlled concurrency
             if valid_communities:
                 concurrent_limit = min(self.max_concurrent_summaries, len(valid_communities))
@@ -837,7 +798,7 @@ class HKGraphTree(BaseGraph):
             return
             
         logger.info(f"\n" + "="*60)
-        logger.info(f"📊 HKGraphTree 层次结构统计报告")
+        logger.info(f"📊 HKGraphTree structure summary")
         logger.info(f"="*60)
         
         total_communities = 0
@@ -866,33 +827,32 @@ class HKGraphTree(BaseGraph):
             })
             
             logger.info(f"\n🏗️  Level {level}:")
-            logger.info(f"   📦 社区数量: {level_community_count}")
-            logger.info(f"   📏 社区大小: 最小={min(level_node_sizes) if level_node_sizes else 0}, "
-                      f"最大={max(level_node_sizes) if level_node_sizes else 0}, "
-                      f"平均={np.mean(level_node_sizes):.1f}, "
-                      f"中位数={np.median(level_node_sizes):.1f}")
-            logger.info(f"   📊 本层节点总数: {sum(level_node_sizes)}")
+            logger.info(f"   📦 Number of communities: {level_community_count}")
+            logger.info(f"   📏 Community size: Min={min(level_node_sizes) if level_node_sizes else 0}, "
+                      f"Max={max(level_node_sizes) if level_node_sizes else 0}, "
+                      f"Avg={np.mean(level_node_sizes):.1f}, "
+                      f"Median={np.median(level_node_sizes):.1f}")
+            logger.info(f"   📊 Total nodes in this level: {sum(level_node_sizes)}")
             
             # Show first few communities as examples
             for i, community in enumerate(communities[:3]):
-                logger.info(f"     - {community['id']}: {len(community['nodes'])} 个节点")
+                logger.info(f"     - {community['id']}: {len(community['nodes'])} nodes")
             if len(communities) > 3:
-                logger.info(f"     - ... (还有 {len(communities)-3} 个社区)")
+                logger.info(f"     - ... (and {len(communities)-3} more communities)")
         
         # Overall statistics
-        logger.info(f"\n🎯 整体统计:")
-        logger.info(f"   📊 总层数: {len(self.hierarchy_levels)}")
-        logger.info(f"   📊 总社区数: {total_communities}")
-        logger.info(f"   📊 总嵌入数: {len(self.node_embeddings)}")
-        logger.info(f"   📊 总摘要数: {len(self.community_summaries)}")
+        logger.info(f"\n🎯 Overall Statistics:")
+        logger.info(f"   📊 Total levels: {len(self.hierarchy_levels)}")
+        logger.info(f"   📊 Total communities: {total_communities}")
+        logger.info(f"   📊 Total embeddings: {len(self.node_embeddings)}")
+        logger.info(f"   📊 Total summaries: {len(self.community_summaries)}")
         
         # Hierarchy compression ratio
         if level_stats:
             base_level_nodes = level_stats[0]['total_nodes']
             top_level_communities = level_stats[-1]['communities'] if len(level_stats) > 1 else base_level_nodes
             compression_ratio = base_level_nodes / top_level_communities if top_level_communities > 0 else 1
-            logger.info(f"   📈 层次压缩比: {compression_ratio:.1f}:1 (从 {base_level_nodes} 个基础节点到 {top_level_communities} 个顶层社区)")
-        
+            logger.info(f"   📈 Hierarchy compression ratio: {compression_ratio:.1f}:1 (from {base_level_nodes} base nodes to {top_level_communities} top-level communities)")
         
         
         logger.info(f"="*60)
@@ -946,34 +906,34 @@ class HKGraphTree(BaseGraph):
             'avg_size': round(total_items / len(buckets), 2) if buckets else 0
         }
 
-    def _print_cluster_stats(self, clusters, stage_name="最终聚类"):
+    def _print_cluster_stats(self, clusters, stage_name="Final Clustering"):
         """
         Print final clustering statistics.
         """
         if not clusters:
-            logger.info(f"{stage_name} - 无聚类结果")
+            logger.info(f"{stage_name} - No clustering results")
             return
             
         sizes = [len(c) for c in clusters]
-        logger.info(f"\n=== {stage_name}结果统计 ===")
-        logger.info(f"🎯 总聚类数: {len(clusters)}")
-        logger.info(f"📏 聚类大小分布:")
-        logger.info(f"   - 最大聚类: {max(sizes)} 个节点")
-        logger.info(f"   - 最小聚类: {min(sizes)} 个节点")
-        logger.info(f"   - 平均聚类: {np.mean(sizes):.1f} 个节点")
-        logger.info(f"   - 中位数聚类: {np.median(sizes):.1f} 个节点")
+        logger.info(f"\n=== {stage_name} Result Statistics ===")
+        logger.info(f"🎯 Total number of clusters: {len(clusters)}")
+        logger.info(f"📏 Cluster size distribution:")
+        logger.info(f"   - Max cluster size: {max(sizes)} nodes")
+        logger.info(f"   - Min cluster size: {min(sizes)} nodes")
+        logger.info(f"   - Average cluster size: {np.mean(sizes):.1f} nodes")
+        logger.info(f"   - Median cluster size: {np.median(sizes):.1f} nodes")
         
-        # 聚类大小分布统计
+        # Cluster size distribution statistics
         size_dist = defaultdict(int)
         for size in sizes:
             size_dist[size] += 1
         
-        logger.info(f"\n📊 聚类大小频次分布:")
-        for size, count in sorted(size_dist.items())[:10]:  # 显示前10个最常见的大小
-            logger.info(f"   - 大小 {size}: {count} 个聚类")
+        logger.info(f"\n📊 Cluster size frequency distribution:")
+        for size, count in sorted(size_dist.items())[:10]:  # Show the top 10 most common sizes
+            logger.info(f"   - Size {size}: {count} clusters")
         
         if len(size_dist) > 10:
-            logger.info(f"   - ... (还有 {len(size_dist)-10} 种其他大小)")
+            logger.info(f"   - ... (and {len(size_dist)-10} other sizes)")
 
     async def _lsh_clustering(self, embeddings: np.ndarray, node_ids: List[str]) -> List[List[str]]:
         """
@@ -984,7 +944,7 @@ class HKGraphTree(BaseGraph):
         # Normalize embeddings
         embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
         n_samples, dim = embeddings.shape
-        logger.info(f"📐 嵌入维度: {dim}, 超平面数量: {self.lsh_num_hyperplanes}")
+        logger.info(f"📐 Embedding Dimension: {dim}, Number of Hyperplanes: {self.lsh_num_hyperplanes}")
         
         # Generate random hyperplanes for LSH
         hyperplanes = np.random.randn(self.lsh_num_hyperplanes, dim)
@@ -1001,7 +961,7 @@ class HKGraphTree(BaseGraph):
             buckets[bucket_id].append(node_ids[i])
         
         # Print initial bucket statistics
-        self._print_bucket_stats(buckets, "初始LSH桶")
+        self._print_bucket_stats(buckets, "Initial LSH Buckets")
         
         # Process buckets to create final clusters
         clusters = []
@@ -1036,9 +996,9 @@ class HKGraphTree(BaseGraph):
             clusters.append(current_cluster)
         
         # Print final clustering statistics
-        self._print_cluster_stats(clusters, f"LSH聚类 (最小大小≥{self.lsh_min_cluster_size})")
+        self._print_cluster_stats(clusters, f"LSH clustering (minimum size ≥{self.lsh_min_cluster_size})")
         
-        logger.info(f"✅ LSH聚类完成，生成 {len(clusters)} 个聚类")
+        logger.info(f"✅ LSH clustering completed, generated {len(clusters)} clusters")
         return clusters
 
     async def _generate_community_summary_and_embedding(self, community_id: str, member_nodes: List[str], level: int):
@@ -1464,16 +1424,13 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
         return [community['id'] for community in self.hierarchy_levels[level]]
     
     async def _persist_graph(self, force: bool = False):
-        """重写持久化方法，同时保存基础图和层次结构"""
-        # 保存基础图
+
         await self._graph.persist(force)
-        
-        # 保存层次结构（如果有的话）
+
         if (self.hierarchy_levels or self.node_embeddings or 
             self.community_summaries or self.community_children):
             await self._save_hierarchy_to_storage(force=force)
-            
-        # 保存FAISS索引（如果有的话）
+
         if any(index is not None for index in self.faiss_indexes.values()):
             await self._save_faiss_indexes()
 
@@ -1481,8 +1438,8 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
     
     async def _build_faiss_index(self):
         """
-        构建三个独立的FAISS向量索引，分别对应entity、chunk、community节点
-        每种类型的节点使用各自的FAISS索引以提高检索效率
+        Three independent FAISS vector indexes are constructed, corresponding to entity, chunk, and community nodes. 
+        Each node type uses its own FAISS index to improve search efficiency.
         """
         try:
             logger.info(f"🔍 Building separate FAISS indexes for {len(self.node_text_embeddings)} nodes")
@@ -1490,8 +1447,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             if not self.node_text_embeddings:
                 logger.warning("⚠️ No node embeddings available for FAISS index")
                 return
-            
-            # 按节点类型分组
+
             node_groups = {
                 'entity': [],
                 'chunk': [],
@@ -1505,20 +1461,17 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                     node_groups['community'].append(node_id)
                 else:
                     node_groups['entity'].append(node_id)
-            
-            # 确保一致的排序
+
             for node_type in node_groups:
                 node_groups[node_type].sort()
-            
-            # 为每种类型分别构建FAISS索引
+
             for node_type, node_ids in node_groups.items():
                 if not node_ids:
                     logger.info(f"🔸 No {node_type} nodes found, skipping index creation")
                     continue
                 
                 logger.info(f"🏗️ Building FAISS index for {len(node_ids)} {node_type} nodes")
-                
-                # 收集该类型节点的embeddings
+
                 embeddings_list = []
                 valid_node_ids = []
                 
@@ -1531,31 +1484,26 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                 if not embeddings_list:
                     logger.warning(f"⚠️ No valid embeddings found for {node_type} nodes")
                     continue
-                
-                # 转换为numpy数组
+
                 embeddings_matrix = np.array(embeddings_list).astype('float32')
                 n_vectors, embedding_dim = embeddings_matrix.shape
                 
                 logger.info(f"📊 {node_type} index: {n_vectors} vectors, {embedding_dim} dimensions")
-                
-                # 创建该类型的FAISS索引
+
                 index = await self._create_single_faiss_index(embedding_dim, node_type)
                 
                 if index is None:
                     logger.warning(f"⚠️ Failed to create FAISS index for {node_type}")
                     continue
-                
-                # 添加向量到索引
+
                 index.add(embeddings_matrix)
-                
-                # 保存索引和映射关系
+
                 self.faiss_indexes[node_type] = index
                 self.faiss_id_to_node[node_type] = {i: node_id for i, node_id in enumerate(valid_node_ids)}
                 self.node_to_faiss_id[node_type] = {node_id: i for i, node_id in enumerate(valid_node_ids)}
                 
                 logger.info(f"✅ {node_type} FAISS index built successfully: {index.ntotal} vectors")
-            
-            # 统计总体信息
+
             total_vectors = sum(index.ntotal if index else 0 for index in self.faiss_indexes.values())
             active_indexes = sum(1 for index in self.faiss_indexes.values() if index is not None)
             
@@ -1573,26 +1521,26 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
 
     async def _create_single_faiss_index(self, embedding_dim: int, node_type: str):
         """
-        为特定节点类型创建单个FAISS索引
-        
+        Creates a single FAISS index for a specific node type.
+
         Args:
-            embedding_dim: 嵌入向量维度
-            node_type: 节点类型 ('entity', 'chunk', 'community')
-            
+        embedding_dim: Embedding vector dimension
+        node_type: Node type ('entity', 'chunk', 'community')
+
         Returns:
-            FAISS索引对象或None
+        FAISS index object or None
         """
         try:
-            # 创建FAISS索引
+
             if self.faiss_index_type.upper() == 'HNSW':
-                # 使用HNSW算法（L2距离）
+
                 index = faiss.IndexHNSWFlat(embedding_dim, self.faiss_hnsw_m)
                 index.hnsw.efConstruction = self.faiss_hnsw_ef_construction
                 index.hnsw.efSearch = self.faiss_hnsw_ef_search
                 logger.debug(f"🏗️ Created HNSW index for {node_type}: M={self.faiss_hnsw_m}, efConstruction={self.faiss_hnsw_ef_construction}")
                 
             elif self.faiss_index_type.upper() == 'HNSW_IP':
-                # 使用HNSW + 内积相似度的组合索引（通过包装实现）
+
                 try:
                     #base_index = faiss.IndexFlatIP(embedding_dim)
                     index = faiss.index_factory(embedding_dim, f"HNSW{self.faiss_hnsw_m}_FLAT", faiss.METRIC_INNER_PRODUCT)
@@ -1605,17 +1553,14 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                     index = faiss.IndexFlatIP(embedding_dim)
                 
             elif self.faiss_index_type.upper() == 'FLAT':
-                # 使用暴力搜索 + 内积相似度
                 index = faiss.IndexFlatIP(embedding_dim)
                 logger.debug(f"🏗️ Created Flat IP index for {node_type}")
                 
             elif self.faiss_index_type.upper() == 'FLAT_L2':
-                # 使用暴力搜索 + L2距离
                 index = faiss.IndexFlatL2(embedding_dim)
                 logger.debug(f"🏗️ Created Flat L2 index for {node_type}")
                 
             else:
-                # 默认使用HNSW + L2
                 index = faiss.IndexHNSWFlat(embedding_dim, self.faiss_hnsw_m)
                 index.hnsw.efConstruction = self.faiss_hnsw_ef_construction
                 index.hnsw.efSearch = self.faiss_hnsw_ef_search
@@ -1628,11 +1573,8 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             return None
 
     async def _save_faiss_indexes(self):
-        """
-        保存三个独立的FAISS索引和映射关系到磁盘
-        """
+
         try:
-            # 检查是否有任何索引需要保存
             active_indexes = {node_type: index for node_type, index in self.faiss_indexes.items() if index is not None}
             
             if not active_indexes:
@@ -1640,27 +1582,23 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                 return
             
             logger.info(f"💾 Saving {len(active_indexes)} FAISS indexes")
-            
-            # 创建保存目录
+
             index_dir = self.faiss_index_path
             os.makedirs(index_dir, exist_ok=True)
-            
-            # 为每个索引类型分别保存
+
             saved_indexes = {}
             total_vectors = 0
             
             for node_type, index in active_indexes.items():
-                # 检查索引是否为空
+
                 if index.ntotal == 0:
                     logger.warning(f"⚠️ {node_type} FAISS index is empty (ntotal=0), skipping save")
                     continue
-                
-                # 检查索引是否已训练（对于需要训练的索引类型）
+
                 if hasattr(index, 'is_trained') and not index.is_trained:
                     logger.warning(f"⚠️ {node_type} FAISS index is not trained, skipping save")
                     continue
-                
-                # 保存FAISS索引文件
+
                 index_file = os.path.join(index_dir, f"faiss_index_{node_type}.index")
                 faiss.write_index(index, index_file)
                 
@@ -1676,8 +1614,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             if not saved_indexes:
                 logger.warning("⚠️ No valid FAISS indexes were saved")
                 return
-            
-            # 保存映射关系
+
             mapping_file = os.path.join(index_dir, "faiss_mappings_multi.pkl")
             mapping_data = {
                 'faiss_id_to_node': self.faiss_id_to_node,
@@ -1689,8 +1626,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             
             with open(mapping_file, 'wb') as f:
                 pickle.dump(mapping_data, f)
-            
-            # 保存配置信息
+
             config_file = os.path.join(index_dir, "faiss_config_multi.pkl")
             config_data = {
                 'faiss_index_type': self.faiss_index_type,
@@ -1716,35 +1652,29 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             raise
 
     async def _load_faiss_indexes(self) -> bool:
-        """
-        从磁盘加载三个独立的FAISS索引和映射关系
-        """
+
         try:
             index_dir = self.faiss_index_path
-            
-            # 检查必要文件是否存在
+
             mapping_file = os.path.join(index_dir, "faiss_mappings_multi.pkl")
             config_file = os.path.join(index_dir, "faiss_config_multi.pkl")
             
             if not os.path.exists(mapping_file):
                 logger.info("📂 Multi-index FAISS files not found, will build new indexes")
                 return False
-            
-            # 加载映射关系和索引信息
+
             with open(mapping_file, 'rb') as f:
                 mapping_data = pickle.load(f)
                 self.faiss_id_to_node = mapping_data['faiss_id_to_node']
                 self.node_to_faiss_id = mapping_data['node_to_faiss_id']
                 saved_indexes_info = mapping_data.get('saved_indexes', {})
-            
-            # 加载配置（如果存在）
+
             if os.path.exists(config_file):
                 with open(config_file, 'rb') as f:
                     config_data = pickle.load(f)
                     expected_node_types = config_data.get('node_types', [])
                     logger.debug(f"📋 Expected node types: {expected_node_types}")
-            
-            # 为每个节点类型加载FAISS索引
+
             loaded_indexes = {}
             total_vectors = 0
             
@@ -1756,16 +1686,13 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                     continue
                 
                 try:
-                    # 加载FAISS索引
                     index = faiss.read_index(index_file)
-                    
-                    # 验证索引完整性
+
                     expected_size = len(self.faiss_id_to_node.get(node_type, {}))
                     if index.ntotal != expected_size:
                         logger.warning(f"⚠️ {node_type} index size mismatch: {index.ntotal} vs {expected_size}")
                         continue
-                    
-                    # 如果是HNSW索引，设置搜索参数
+
                     if hasattr(index, 'hnsw'):
                         index.hnsw.efSearch = self.faiss_hnsw_ef_search
                     
@@ -1797,14 +1724,14 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
 
     async def get_node_info_by_ids(self, node_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """
-        根据节点ID列表获取节点详细信息
-        用于FAISS检索后获取节点内容
-        
+        Get detailed node information based on a list of node IDs.
+        Used to retrieve node information after a FAISS search.
+
         Args:
-            node_ids: 节点ID列表
-            
+        node_ids: List of node IDs
+
         Returns:
-            Dict[node_id, node_info] 节点信息字典
+        Dict[node_id, node_info]: Node information dictionary.
         """
         node_info_dict = {}
         
@@ -1828,7 +1755,6 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                     })
                     
                 elif node_id.startswith('COMMUNITY_'):
-                    # Community节点信息
                     node_info.update({
                         'summary': self.community_summaries.get(node_id, ''),
                         'children': list(self.community_children.get(node_id, set())),
@@ -1836,14 +1762,12 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                         'content': self.community_summaries.get(node_id, ''),
                         'content_type': 'community'
                     })
-                    
-                    # 解析层次级别
+
                     level_match = re.search(r'COMMUNITY_L(\d+)_C\d+', node_id)
                     if level_match:
                         node_info['level'] = int(level_match.group(1))
                     
                 else:
-                    # Entity节点信息
                     entity_data = await self._graph.get_node(node_id)
                     if entity_data:
                         node_info.update({
@@ -1865,7 +1789,6 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                 
             except Exception as e:
                 logger.warning(f"Failed to get info for node {node_id}: {e}")
-                # 提供基本信息作为fallback
                 node_info_dict[node_id] = {
                     'node_id': node_id,
                     'node_type': self._get_node_type(node_id),
@@ -1877,7 +1800,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
         return node_info_dict
 
     def _get_node_type(self, node_id: str) -> str:
-        """获取节点类型"""
+        """Get the type of node"""
         if node_id.startswith('CHUNK_'):
             return 'chunk'
         elif node_id.startswith('COMMUNITY_'):
@@ -1887,54 +1810,54 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
 
     async def search_similar_entities(self, query_embedding: np.ndarray, top_k: int = 10) -> List[Tuple[str, float]]:
         """
-        使用Entity专用FAISS索引搜索最相似的entity节点
-        
+        Searches for the most similar entity nodes using the entity-specific FAISS index.
+
         Args:
-            query_embedding: 查询向量
-            top_k: 返回top k个结果
-            
+        query_embedding: Query vector
+        top_k: Returns the top k results
+
         Returns:
-            List[(node_id, similarity_score)] 相似entity节点列表
+        List[(node_id, similarity_score)]: List of similar entity nodes
         """
         return await self._search_single_index('entity', query_embedding, top_k)
     
     async def search_similar_chunks(self, query_embedding: np.ndarray, top_k: int = 10) -> List[Tuple[str, float]]:
         """
-        使用Chunk专用FAISS索引搜索最相似的chunk节点
-        
+        Searches for the most similar chunk nodes using a chunk-specific FAISS index.
+
         Args:
-            query_embedding: 查询向量
-            top_k: 返回top k个结果
-            
+        query_embedding: Query vector
+        top_k: Returns the top k results
+
         Returns:
-            List[(node_id, similarity_score)] 相似chunk节点列表
+        List[(node_id, similarity_score)]: List of similar chunk nodes
         """
         return await self._search_single_index('chunk', query_embedding, top_k)
     
     async def search_similar_communities(self, query_embedding: np.ndarray, top_k: int = 10) -> List[Tuple[str, float]]:
         """
-        使用Community专用FAISS索引搜索最相似的community节点
-        
+        Searches for the most similar community nodes using the community-specific FAISS index.
+
         Args:
-            query_embedding: 查询向量
-            top_k: 返回top k个结果
-            
+        query_embedding: Query vector
+        top_k: Returns the top k results
+
         Returns:
-            List[(node_id, similarity_score)] 相似community节点列表
+        List[(node_id, similarity_score)]: List of similar community nodes
         """
         return await self._search_single_index('community', query_embedding, top_k)
     
     async def _search_single_index(self, node_type: str, query_embedding: np.ndarray, top_k: int) -> List[Tuple[str, float]]:
         """
-        在单个FAISS索引中搜索相似节点的内部方法
-        
+        Internal method for searching for similar nodes in a single FAISS index.
+
         Args:
-            node_type: 节点类型 ('entity', 'chunk', 'community')
-            query_embedding: 查询向量
-            top_k: 返回top k个结果
-            
+        node_type: Node type ('entity', 'chunk', 'community')
+        query_embedding: Query embedding
+        top_k: Returns the top k results.
+
         Returns:
-            List[(node_id, similarity_score)] 相似节点列表
+        List[(node_id, similarity_score)]: List of similar nodes
         """
         if node_type not in self.faiss_indexes:
             logger.error(f"❌ Invalid node type: {node_type}")
@@ -1946,34 +1869,28 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             return []
         
         try:
-            # 确保查询向量格式正确
             if not isinstance(query_embedding, np.ndarray):
                 query_embedding = np.array(query_embedding)
             
             query_embedding = query_embedding.astype('float32').reshape(1, -1)
-            
-            # 执行搜索
-            #search_k = min(top_k * 2, index.ntotal)  # 搜索更多结果以便过滤 #TODO
+
             search_k = min(top_k , index.ntotal)
             distances, indices = index.search(query_embedding, search_k)
-            
-            # 转换结果
+
             results = []
             id_mapping = self.faiss_id_to_node[node_type]
             
             for dist, idx in zip(distances[0], indices[0]):
-                if idx == -1:  # FAISS返回-1表示无效结果
+                if idx == -1:  
                     continue
                     
                 node_id = id_mapping.get(idx)
                 if node_id is None:
                     continue
-                
-                # 转换相似度分数
+
                 similarity_score = self._convert_distance_to_similarity(float(dist))
                 results.append((node_id, similarity_score))
-            
-            # 按相似度分数降序排序并截取
+
             results.sort(key=lambda x: x[1], reverse=True)
             results = results[:top_k]
             
@@ -1983,143 +1900,56 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
         except Exception as e:
             logger.error(f"❌ Failed to search {node_type} index: {e}")
             return []
-
-    async def search_similar_nodes(self, query_embedding: np.ndarray, top_k: int = 10, 
-                                 node_types: List[str] = None) -> List[Tuple[str, float]]:
-        """
-        使用多个FAISS索引搜索最相似的节点（支持跨索引搜索）
-        
-        Args:
-            query_embedding: 查询向量
-            top_k: 返回top k个结果
-            node_types: 过滤的节点类型 ['chunk', 'entity', 'community']，如果为None则搜索所有类型
-            
-        Returns:
-            List[(node_id, similarity_score)] 相似节点列表
-            注意：相似度分数范围[0, 1]，值越大越相似
-        """
-        # 检查是否有任何可用的索引
-        available_indexes = {nt: idx for nt, idx in self.faiss_indexes.items() if idx is not None}
-        if not available_indexes:
-            logger.error("❌ No FAISS indexes available, please build indexes first")
-            return []
-        
-        # 确定要搜索的节点类型
-        if node_types is None:
-            # 如果没有指定，搜索所有可用类型
-            search_types = list(available_indexes.keys())
-        else:
-            # 过滤出可用的指定类型
-            search_types = [nt for nt in node_types if nt in available_indexes]
-        
-        if not search_types:
-            logger.warning(f"⚠️ No available indexes for requested node types: {node_types}")
-            return []
-        
-        try:
-            # 从每个指定类型的索引中搜索
-            all_results = []
-            per_index_k = max(1, top_k // len(search_types) * 2)  # 每个索引搜索更多结果
-            
-            for node_type in search_types:
-                logger.debug(f"🔍 Searching {node_type} index with k={per_index_k}")
-                type_results = await self._search_single_index(node_type, query_embedding, per_index_k)
-                all_results.extend(type_results)
-            
-            if not all_results:
-                logger.info("🔍 No similar nodes found across all indexes")
-                return []
-            
-            # 合并所有结果并按相似度排序
-            all_results.sort(key=lambda x: x[1], reverse=True)
-            
-            # 截取到指定数量
-            final_results = all_results[:top_k]
-            
-            # 统计结果分布
-            type_counts = {}
-            for node_id, _ in final_results:
-                node_type = self._get_node_type(node_id)
-                type_counts[node_type] = type_counts.get(node_type, 0) + 1
-            
-            logger.info(f"🔍 Found {len(final_results)} similar nodes (requested: {top_k})")
-            logger.debug(f"🔍 Result distribution: {type_counts}")
-            return final_results
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to search similar nodes: {e}")
-            return []
     
     def _convert_distance_to_similarity(self, distance_or_score: float) -> float:
         """
-        智能转换距离/分数为统一的相似度分数
-        
+        Intelligently converts distances/scores to a unified similarity score.
+
         Args:
-            distance_or_score: FAISS返回的原始值
-            
+        distance_or_score: The original value returned by FAISS.
+
         Returns:
-            similarity: 标准化相似度分数（越大越相似），范围[0, 1]
+        similarity: The normalized similarity score (larger means more similarity), in the range [0, 1].
         """
-        # 基于配置的索引类型进行处理（不再依赖具体索引对象）
         if self.faiss_index_type.upper() in ['FLAT', 'HNSW_IP']:
-            # 内积索引：返回值已经是相似度（越大越相似）
-            # 但可能需要归一化到[0,1]范围
             if distance_or_score < 0:
-                # 如果是负值，使用sigmoid函数转换
                 similarity = 1.0 / (1.0 + np.exp(-distance_or_score))
             else:
-                # 正值，使用tanh函数确保在[0,1]范围
                 similarity = np.tanh(distance_or_score)
-            #logger.debug(f"🔵 IP index: raw_score={distance_or_score:.4f} -> similarity={similarity:.4f}")
             
         elif self.faiss_index_type.upper() in ['HNSW', 'FLAT_L2']:
-            # L2距离索引：返回值是距离（越小越相似）
-            # 使用负指数变换：similarity = exp(-distance)
             similarity = np.exp(-distance_or_score)
-            #logger.debug(f"🔴 L2 index: distance={distance_or_score:.4f} -> similarity={similarity:.4f}")
             
         else:
-            # 未知索引类型，尝试自动检测
             logger.warning(f"Unknown index type: {self.faiss_index_type}, attempting auto-detection")
-            
-            # 基于数值特征进行启发式判断
+
             if distance_or_score < 0 or distance_or_score > 2.0:
-                # 可能是内积分数
                 similarity = 1.0 / (1.0 + np.exp(-distance_or_score))
             else:
-                # 可能是L2距离
                 similarity = np.exp(-distance_or_score)
-            
-            #logger.debug(f"🟡 Auto-detect: value={distance_or_score:.4f} -> similarity={similarity:.4f}")
-        
-        # 确保相似度在[0, 1]范围内
+
         similarity = max(0.0, min(1.0, float(similarity)))
         return similarity
     
     def _l2_distance_to_similarity(self, l2_distance: float) -> float:
         """
-        将L2距离转换为相似度分数（保留为向后兼容）
-        
+        Converts L2 distance to a similarity score (retained for backward compatibility)
+
         Args:
-            l2_distance: L2距离（越小越相似）
-            
+        l2_distance: L2 distance (smaller, more similar)
+
         Returns:
-            similarity: 相似度分数（越大越相似），范围[0, 1]
+        similarity: Similarity score (larger, more similar), range [0, 1]
         """
-        # 调用新的智能转换方法
         return self._convert_distance_to_similarity(l2_distance)
 
     async def get_faiss_stats(self) -> Dict[str, Any]:
-        """
-        获取多个FAISS索引的统计信息
-        """
-        # 检查是否有任何可用的索引
+
         available_indexes = {nt: idx for nt, idx in self.faiss_indexes.items() if idx is not None}
         
         if not available_indexes:
             return {'status': 'not_built'}
-        
-        # 计算总体统计
+
         total_vectors = 0
         vector_dimensions = []
         
@@ -2135,8 +1965,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
             'active_indexes': list(available_indexes.keys()),
             'total_node_mappings': sum(len(mappings) for mappings in self.faiss_id_to_node.values()),
         }
-        
-        # 详细的每个索引统计
+
         index_details = {}
         type_counts = {'chunk': 0, 'entity': 0, 'community': 0}
         
@@ -2149,8 +1978,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                 'vector_dimension': index.d,
                 'node_mappings': node_mappings
             }
-            
-            # HNSW特定统计
+
             if hasattr(index, 'hnsw'):
                 index_details[node_type]['hnsw_stats'] = {
                     'M': self.faiss_hnsw_m,

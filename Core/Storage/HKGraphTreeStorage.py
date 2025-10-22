@@ -1,7 +1,7 @@
 import html
 import json
 import os
-import pickle  # 添加pickle导入
+import pickle  
 import time
 from collections import defaultdict
 from typing import Any, Union, cast, Dict, Optional
@@ -20,16 +20,14 @@ class HKGraphTreeStorage(BaseGraphStorage):
         super().__init__()
         self.edge_list = None
         self.node_list = None
-        # 层次结构相关的存储
         self._hierarchy_data = None
-        # 增量更新相关的存储
         self._incremental_data = None
         self._last_update_timestamp = None
 
-    name: str = "nx_data.graphml"  # NetworkX基础图文件
-    hierarchy_name: str = "hk_hierarchy.pkl"  # 层次结构数据文件
-    incremental_name: str = "hk_incremental.pkl"  # 增量更新数据文件
-    metadata_name: str = "hk_metadata.json"  # 元数据文件
+    name: str = "nx_data.graphml"  # NetworkX
+    hierarchy_name: str = "hk_hierarchy.pkl"  
+    incremental_name: str = "hk_incremental.pkl"  # Incremental update data file
+    metadata_name: str = "hk_metadata.json"  # Metadata file
     _graph: nx.Graph = nx.Graph()
 
     def load_nx_graph(self) -> bool:
@@ -51,7 +49,6 @@ class HKGraphTreeStorage(BaseGraphStorage):
             return False
 
     def load_hierarchy_data(self) -> bool:
-        """加载层次结构数据"""
         logger.info(f"Attempting to load hierarchy data from: {self.hierarchy_pkl_file}")
         if os.path.exists(self.hierarchy_pkl_file):
             try:
@@ -69,7 +66,6 @@ class HKGraphTreeStorage(BaseGraphStorage):
             return False
 
     def write_hierarchy_data(self, hierarchy_data: Dict[str, Any]):
-        """保存层次结构数据"""
         logger.info(f"Writing hierarchy data to: {self.hierarchy_pkl_file}")
         with open(self.hierarchy_pkl_file, "wb") as file:
             pickle.dump(hierarchy_data, file)
@@ -84,24 +80,20 @@ class HKGraphTreeStorage(BaseGraphStorage):
 
     @property
     def hierarchy_data(self):
-        """获取层次结构数据"""
         return self._hierarchy_data
 
     @property
     def hierarchy_pkl_file(self):
-        """层次结构数据文件路径"""
         assert self.namespace is not None
         return self.namespace.get_save_path(self.hierarchy_name)
     
     @property
     def incremental_pkl_file(self):
-        """增量更新数据文件路径"""
         assert self.namespace is not None
         return self.namespace.get_save_path(self.incremental_name)
     
     @property
     def metadata_json_file(self):
-        """元数据文件路径"""
         assert self.namespace is not None
         return self.namespace.get_save_path(self.metadata_name)
 
@@ -151,16 +143,13 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return fixed_graph
 
     async def load_graph(self, force: bool = False) -> bool:
-        """加载图和层次结构数据"""
         if force:
             logger.info("Force rebuilding the graph and hierarchy")
             return False
         else:
-            # 同时加载基础图和层次结构
             graph_loaded = self.load_nx_graph()
             hierarchy_loaded = self.load_hierarchy_data()
             
-            # 只有当两者都成功加载时才返回True
             success = graph_loaded and hierarchy_loaded
             if success:
                 logger.info("✅ Successfully loaded both graph and hierarchy data")
@@ -180,14 +169,12 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return self._graph
 
     async def _persist(self, force):
-        """持久化基础图"""
         if os.path.exists(self.graphml_xml_file) and not force:
             return
         logger.info(f"Writing graph into {self.graphml_xml_file}")
         HKGraphTreeStorage.write_nx_graph(self.graph, self.graphml_xml_file)
 
     async def persist_hierarchy(self, hierarchy_data: Dict[str, Any], force: bool = False):
-        """持久化层次结构数据"""
         if os.path.exists(self.hierarchy_pkl_file) and not force:
             logger.info("Hierarchy data already exists and force=False, skipping")
             return
@@ -273,18 +260,17 @@ class HKGraphTreeStorage(BaseGraphStorage):
     # TODO: remove to the basegraph class
     async def get_nodes_data(self):
         """
-        获取所有层次化节点数据，包括：
-        1. 底层基础图节点（entities和chunks）
-        2. 上层摘要节点（community summaries）
-        类似TreeGraphStorage的实现，返回用于entities_vdb的数据
+        Retrieve all hierarchical node data, including:
+        1. Bottom-level graph nodes (entities and chunks)
+        2. Top-level summary nodes (community summaries)
         """
         all_nodes_data = []
         
-        # 1. 获取基础图的entity节点（底层节点）
+        # 1. Get the entity node (bottom-level node) of the base graph
         base_nodes = await self._get_base_graph_nodes_data()
         all_nodes_data.extend(base_nodes)
         
-        # 2. 获取层次结构的摘要节点（上层节点）
+        # 2. Get the summary nodes (top-level nodes) of the hierarchy
         if self._hierarchy_data:
             hierarchy_nodes = await self._get_hierarchy_nodes_data()
             all_nodes_data.extend(hierarchy_nodes)
@@ -295,7 +281,6 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return all_nodes_data
 
     async def _get_base_graph_nodes_data(self):
-        """获取基础图节点数据"""
         node_list = list(self._graph.nodes())
 
         async def get_base_node_data(node_id):
@@ -303,28 +288,28 @@ class HKGraphTreeStorage(BaseGraphStorage):
             node_data.setdefault("description", "")
             node_data.setdefault("entity_type", "")
             
-            # 判断是否为chunk节点（以CHUNK开头）
+            # Check if the node is a chunk node (starts with CHUNK)
             if node_id.startswith("CHUNK"):
-                # 处理chunk节点
+                # Process chunk nodes
                 chunk_text = node_data.get("content", node_data.get("description", ""))
                 
-                # 获取chunk节点的文本嵌入
+                # Get the text embedding of the chunk node
                 node_embedding = self._get_node_text_embedding(node_id)
                 
                 return {
-                    "content": chunk_text,  # chunk的content就是chunk本身的文本
+                    "content": chunk_text,  # The content of the chunk is the text of the chunk itself
                     "node_id": node_id,
-                    "node_type": "chunk",  # 标识为文档块节点
-                    "level": 0,  # 基础层级
+                    "node_type": "chunk",  # Identify as a document block node
+                    "level": 0,  # Base level
                     "chunk_text": chunk_text,
                     "source_id": node_data.get("source_id", ""),
                     "chunk_index": node_data.get("chunk_index", ""),
-                    "index": node_id,           # ✅ 改为存储节点ID
-                    "embedding": node_embedding  # ✅ embedding存储在单独字段
+                    "index": node_id,           # ✅ Change to store node ID
+                    "embedding": node_embedding  # ✅ Embedding stored in a separate field
             
                 }
             else:
-                # 处理entity节点
+                # Process entity nodes
                 content_parts = []
                 content_parts.append(node_data.get("entity_name", node_id))
 
@@ -336,75 +321,74 @@ class HKGraphTreeStorage(BaseGraphStorage):
 
                 content = ": ".join(content_parts) if content_parts else node_id
                 
-                # 获取entity节点的文本嵌入
+                # Get the text embedding of the entity node
                 node_embedding = self._get_node_text_embedding(node_id)
                 
                 return {
                     "content": content,
                     "node_id": node_id,
-                    "node_type": "entity",  # 标识为基础实体节点
-                    "level": 0,  # 基础层级
+                    "node_type": "entity",  # Identify as a base entity node
+                    "level": 0,  # Base level
                     "entity_name": node_data.get("entity_name", node_id),
                     "entity_type": node_data.get("entity_type", ""),
                     "description": node_data.get("description", ""),
-                    "index": node_id,           # ✅ 改为存储节点ID
-                    "embedding": node_embedding  # ✅ embedding存储在单独字段
+                    "index": node_id,           # ✅ Change to store node ID
+                    "embedding": node_embedding  # ✅ Embedding stored in a separate field
                 }
 
         nodes = await asyncio.gather(*[get_base_node_data(node) for node in node_list])
         return nodes
 
     async def _get_hierarchy_nodes_data(self):
-        """获取层次结构节点数据"""
         if not self._hierarchy_data:
             return []
             
         hierarchy_nodes = []
         
-        # 从hierarchy_data中提取信息
+        # Extract information from hierarchy_data
         community_summaries = self._hierarchy_data.get('community_summaries', {})
         community_children = self._hierarchy_data.get('community_children', {})
         hierarchy_levels = self._hierarchy_data.get('hierarchy_levels', {})
         
         for community_id, summary_text in community_summaries.items():
-            # 获取层级信息
+            # Get the level information
             level = None
             for lvl, communities in hierarchy_levels.items():
                 if community_id in communities:
-                    level = int(lvl) + 1  # +1因为基础节点是level 0
+                    level = int(lvl) + 1  # +1 because the base node is level 0
                     break
             
             if level is None:
-                level = 1  # 默认层级
+                level = 1  # Default level
             
-            # 获取子节点信息
+            # Get the child node information
             children = community_children.get(community_id, [])
             children_count = len(children)
             
-            # 构建摘要节点内容
+            # Build the summary node content
             #content_parts = [f"社区摘要 {community_id}"]
             content_parts = []
             if summary_text and summary_text.strip():
                 content_parts.append(summary_text.strip())
             # if children_count > 0:
-            #     content_parts.append(f"包含 {children_count} 个子节点")
+            #     content_parts.append(f"Contains {children_count} child nodes")
                 
             content = ": ".join(content_parts)
             
-            # 获取community节点的文本嵌入 (community_id已经是正确的格式，如 COMMUNITY_L0_C0)
+            # Get the text embedding of the community node (community_id is already in the correct format, such as COMMUNITY_L0_C0)
             node_embedding = self._get_node_text_embedding(community_id)
             
             hierarchy_nodes.append({
                 "content": content,
                 "node_id": community_id,
-                "node_type": "community_summary",  # 标识为社区摘要节点
+                "node_type": "community_summary",  # Identify as a community summary node
                 "level": level,
                 "community_id": community_id,
                 "summary_text": summary_text,
                 "children_count": children_count,
                 "children": children,
-                "index": community_id,           # ✅ 改为存储节点ID
-                "embedding": node_embedding  # ✅ embedding存储在单独字段
+                "index": community_id,           # ✅ Change to store node ID
+                "embedding": node_embedding  # ✅ Embedding stored in a separate field
             })
         
         return hierarchy_nodes
@@ -518,49 +502,18 @@ class HKGraphTreeStorage(BaseGraphStorage):
 
     async def get_node_metadata(self) -> list[str]:
         """
-        返回层次化节点的元数据字段列表
-        类似TreeGraphStorage的实现，但包含更丰富的层次化信息
+        Return the metadata fields list of the hierarchical nodes
         """
         return [
-            "node_id",        # 节点标识符（类似TreeGraphStorage的index）
-            "node_type",      # 节点类型（entity/chunk/community_summary）
-            "level",          # 层次级别
-            "content",        # 节点内容
-            "index",           # 节点的文本嵌入向量
+            "node_id",        # Node identifier (similar to the index of TreeGraphStorage)
+            "node_type",      # Node type (entity/chunk/community_summary)
+            "level",          # Hierarchy level
+            "content",        # Node content
+            "index",           # The text embedding vector of the node
             "embedding"
         ]
 
-    # async def get_node_metadata(self) -> list[str]:
-    #     """
-    #     返回层次化节点的元数据字段列表
-    #     类似TreeGraphStorage的实现，但包含更丰富的层次化信息
-    #     """
-    #     return [
-    #         "node_id",        # 节点标识符（类似TreeGraphStorage的index）
-    #         "node_type",      # 节点类型（entity/chunk/community_summary）
-    #         "level",          # 层次级别
-    #         "content",        # 节点内容
-    #         "index"           # 节点的文本嵌入向量
-    #     ]
-    
 
-    # async def get_node_metadata(self) -> list[str]:
-    #     """
-    #     返回层次化节点的元数据字段列表
-    #     类似TreeGraphStorage的实现，但包含更丰富的层次化信息
-    #     """
-    #     return [
-    #         "node_id",        # 节点标识符（类似TreeGraphStorage的index）
-    #         "node_type",      # 节点类型（entity/chunk/community_summary）
-    #         "level",          # 层次级别
-    #         "entity_name",    # 实体名称（仅entity节点有）
-    #         "entity_type",    # 实体类型（仅entity节点有）
-    #         "source_id",      # 来源文档ID（仅chunk节点有）
-    #         "chunk_index",    # 文档块索引（仅chunk节点有）
-    #         "community_id",   # 社区ID（仅community_summary节点有）
-    #         "children_count", # 子节点数量（仅community_summary节点有）
-    #         "index"           # 节点的文本嵌入向量
-    #     ]
 
     async def get_edge_metadata(self) -> list[str]:
         relation_metadata = ["src_id", "tgt_id"]
@@ -729,32 +682,32 @@ class HKGraphTreeStorage(BaseGraphStorage):
         # pdb.set_trace()
         return neighbor_list
 
-    # ==================== 层次化数据支持方法 ====================
-    
+    # ==================== Hierarchical data support methods ====================
+        
     async def get_nodes_by_level(self, level: int):
-        """根据层次级别获取节点"""
+        """Get nodes by hierarchy level"""
         all_nodes = await self.get_nodes_data()
         return [node for node in all_nodes if node.get("level") == level]
     
     async def get_nodes_by_type(self, node_type: str):
-        """根据节点类型获取节点"""
+        """Get nodes by node type"""
         all_nodes = await self.get_nodes_data()
         return [node for node in all_nodes if node.get("node_type") == node_type]
         
     async def get_entity_nodes(self):
-        """获取所有实体节点（底层基础节点）"""
+        """Get all entity nodes (bottom-level base nodes)"""
         return await self.get_nodes_by_type("entity")
         
     async def get_community_summary_nodes(self):
-        """获取所有社区摘要节点（上层摘要节点）"""
+        """Get all community summary nodes (top-level summary nodes)"""
         return await self.get_nodes_by_type("community_summary")
         
     async def get_hierarchy_levels(self):
-        """获取所有层次级别"""
+        """Get all hierarchy levels"""
         if not self._hierarchy_data:
-            return [0]  # 只有基础层级
+            return [0]  # Only the base level
         
-        levels = set([0])  # 基础层级
+        levels = set([0])  # Base level
         hierarchy_levels = self._hierarchy_data.get('hierarchy_levels', {})
         for level in hierarchy_levels.keys():
             levels.add(int(level) + 1)
@@ -762,7 +715,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return sorted(list(levels))
         
     async def get_community_info(self, community_id: str):
-        """获取特定社区的详细信息"""
+        """Get the detailed information of a specific community"""
         if not self._hierarchy_data:
             return None
             
@@ -782,7 +735,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
         }
     
     async def get_hierarchy_statistics(self):
-        """获取层次结构统计信息"""
+        """Get the statistics of the hierarchy structure"""
         stats = {
             "total_nodes": 0,
             "base_nodes": 0,
@@ -813,7 +766,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
 
     def _get_node_text_embedding(self, node_id: str):
         """
-        获取节点的文本嵌入，如果没有则返回None
+        Get the text embedding of the node, if not return None
         """
         if not self._hierarchy_data:
             return None
@@ -822,7 +775,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
         embedding = node_text_embeddings.get(node_id)
         
         if embedding is not None:
-            # 如果是numpy数组，转换为列表以便序列化
+            # If it is a numpy array, convert it to a list for serialization
             if hasattr(embedding, 'tolist'):
                 return embedding.tolist()
             return embedding
@@ -835,10 +788,9 @@ class HKGraphTreeStorage(BaseGraphStorage):
         self._incremental_data = None
         self._last_update_timestamp = None
 
-    # ==================== 增量更新数据管理方法 ====================
+    # ==================== Incremental update data management methods ====================
     
     def load_incremental_data(self) -> bool:
-        """加载增量更新数据"""
         logger.info(f"Attempting to load incremental data from: {self.incremental_pkl_file}")
         if os.path.exists(self.incremental_pkl_file):
             try:
@@ -854,9 +806,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
             return False
 
     def write_incremental_data(self, incremental_data: Dict[str, Any]):
-        """保存增量更新数据"""
         logger.info(f"Writing incremental data to: {self.incremental_pkl_file}")
-        # 添加时间戳
         incremental_data['timestamp'] = time.time()
         incremental_data['last_modified'] = time.strftime('%Y-%m-%d %H:%M:%S')
         
@@ -867,14 +817,12 @@ class HKGraphTreeStorage(BaseGraphStorage):
         logger.info(f"Successfully wrote incremental data")
 
     async def persist_incremental(self, incremental_data: Dict[str, Any], force: bool = False):
-        """持久化增量数据"""
         if os.path.exists(self.incremental_pkl_file) and not force:
             logger.info("Incremental data already exists and force=False, skipping")
             return
         self.write_incremental_data(incremental_data)
 
     def load_metadata(self) -> Dict[str, Any]:
-        """加载元数据"""
         if os.path.exists(self.metadata_json_file):
             try:
                 with open(self.metadata_json_file, 'r') as f:
@@ -887,7 +835,6 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return {}
 
     def save_metadata(self, metadata: Dict[str, Any]):
-        """保存元数据"""
         metadata['last_updated'] = time.strftime('%Y-%m-%d %H:%M:%S')
         metadata['timestamp'] = time.time()
         
@@ -899,26 +846,19 @@ class HKGraphTreeStorage(BaseGraphStorage):
             logger.error(f"Failed to save metadata: {e}")
 
     def get_incremental_data(self) -> Optional[Dict[str, Any]]:
-        """获取增量数据"""
         return self._incremental_data
 
     def get_last_update_timestamp(self) -> Optional[float]:
-        """获取最后更新时间戳"""
         return self._last_update_timestamp
 
     async def load_full_graph_with_incremental(self, force: bool = False) -> bool:
-        """
-        加载完整图结构包括增量数据
-        """
+
         if force:
             logger.info("Force rebuilding the graph with incremental data")
             return False
         
-        # 加载基础图
         graph_loaded = self.load_nx_graph()
-        # 加载层次结构
         hierarchy_loaded = self.load_hierarchy_data()
-        # 加载增量数据
         incremental_loaded = self.load_incremental_data()
         
         success = graph_loaded and hierarchy_loaded
@@ -932,11 +872,11 @@ class HKGraphTreeStorage(BaseGraphStorage):
         return success
 
     def has_incremental_data(self) -> bool:
-        """检查是否存在增量数据"""
+        """Check whether there is incremental data"""
         return os.path.exists(self.incremental_pkl_file)
 
     def get_data_statistics(self) -> Dict[str, Any]:
-        """获取数据统计信息"""
+        """Get data statistics"""
         stats = {
             'graph_exists': os.path.exists(self.graphml_xml_file),
             'hierarchy_exists': os.path.exists(self.hierarchy_pkl_file),
@@ -948,7 +888,6 @@ class HKGraphTreeStorage(BaseGraphStorage):
             'last_update': None
         }
         
-        # 获取最后更新时间
         if self._incremental_data and 'last_modified' in self._incremental_data:
             stats['last_update'] = self._incremental_data['last_modified']
         
