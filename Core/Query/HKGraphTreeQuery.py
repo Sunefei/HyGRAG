@@ -12,19 +12,19 @@ from Core.Common.Constants import Retriever
 
 class HKGraphTreeQuery(BaseQuery):
     """
-    HKGraphTree专用查询器
+    Dedicated querier for HKGraphTree.
     
-    支持基于层次化社区结构的从顶向下检索和查询处理
+    Supports top-down retrieval and query processing based on hierarchical community structure.
     """
     
     def __init__(self, config, retriever_context):
         super().__init__(config, retriever_context)
         
-        # 直接从retriever_context获取上下文信息
-        # RetrieverContext.context是一个字典，包含所有注册的上下文
+        # Directly get context information from retriever_context
+        # RetrieverContext.context is a dictionary containing all registered contexts
         contexts = retriever_context.context
         
-        # 初始化TripleExtractor，传入必需的llm参数
+        # Initialize TripleExtractor, passing the required llm parameter
         self.triple_extractor = TripleExtractor(
             llm=self.llm,
             entities_vdb=contexts.get('entities_vdb'),
@@ -32,8 +32,8 @@ class HKGraphTreeQuery(BaseQuery):
             doc_chunk=contexts.get('doc_chunk')
         )
         
-        # 创建HKGraphTree专用检索器
-        # 从contexts中移除config，避免重复传递
+        # Create a dedicated retriever for HKGraphTree
+        # Remove config from contexts to avoid duplicate passing
         retriever_contexts = {k: v for k, v in contexts.items() if k != 'config'}
         self.tree_retriever = HKGraphTreeRetriever(
             config=config,
@@ -42,29 +42,29 @@ class HKGraphTreeQuery(BaseQuery):
 
     async def _retrieve_relevant_contexts(self, query: str, **kwargs) -> str:
         """
-        检索相关上下文 - BaseQuery的抽象方法实现
+        Retrieve relevant context - implementation of the abstract method from BaseQuery.
         
         Args:
-            query: 用户查询问题
+            query: User query question.
             
         Returns:
-            构建的上下文字符串
+            Constructed context string.
         """
         
         try:
-            # Step 1: 提取查询实体（如果需要）
+            # Step 1: Extract query entities (if needed)
             # query_entities = await self.extract_query_entities(query)
             query_entities = [] 
 
-            # Step 2: 执行层次化图检索
+            # Step 2: Execute hierarchical graph retrieval
             retrieval_results = await self._execute_hierarchical_retrieval(
                 query, query_entities
             )
             
-            # Step 3: 构建上下文
+            # Step 3: Build context
             context = await self._build_context_from_results(retrieval_results)
             
-            #logger.info("✅ HKGraphTree上下文检索完成")
+            #logger.info("✅ HKGraphTree context retrieval completed")
             return context
             
         except Exception as e:
@@ -73,21 +73,21 @@ class HKGraphTreeQuery(BaseQuery):
 
     async def query(self, question: str) -> str:
         """
-        HKGraphTree的主查询方法（重写BaseQuery的query方法）
+        Main query method for HKGraphTree (overrides BaseQuery's query method).
         
         Args:
-            question: 用户查询问题
+            question: User query question.
             
         Returns:
-            生成的回答
+            Generated answer.
         """
-        logger.info(f"🌲 HKGraphTree查询开始: {question[:100]}...")
+        logger.info(f"🌲 HKGraphTree query started: {question[:100]}...")
         
         try:
-            # 获取上下文
+            # Get context
             context = await self._retrieve_relevant_contexts(question)
             
-            # 根据查询类型生成回答
+            # Generate answer based on query type
             if self.config.query_type == "summary":
                 response = await self.generation_summary(question, context)
             elif self.config.query_type == "qa":
@@ -96,7 +96,7 @@ class HKGraphTreeQuery(BaseQuery):
                 logger.error("Invalid query type")
                 response = "Unsupported query type"
             
-            #logger.debug("✅ HKGraphTree查询完成")
+            #logger.debug("✅ HKGraphTree query completed")
             return response
             
         except Exception as e:
@@ -108,12 +108,12 @@ class HKGraphTreeQuery(BaseQuery):
         Execute retrieval
         """
         
-        logger.info(f"🔧 使用检索方法: hk_tree_flat_search")
+        logger.info(f"🔧 Using retrieval method: hk_tree_flat_search")
         
         try:
-            # 检查tree_retriever是否可用
+            # Check if tree_retriever is available
             if not hasattr(self, 'tree_retriever') or self.tree_retriever is None:
-                logger.error("❌ tree_retriever未正确初始化")
+                logger.error("❌ tree_retriever not initialized correctly")
                 return self._get_empty_results()
                 
             results = None
@@ -122,17 +122,17 @@ class HKGraphTreeQuery(BaseQuery):
                 if hasattr(self.tree_retriever, '_hk_tree_flat_search_retrieval'):
                     results = await self.tree_retriever._hk_tree_flat_search_retrieval(question, query_entities)
                 else:
-                    logger.warning("⚠️ flat_search检索方法不存在，使用回退方法")
+                    logger.warning("⚠️ flat_search retrieval method does not exist, using fallback method")
                     results = await self._fallback_retrieval(question, query_entities)
                         
             except Exception as retrieval_error:
-                logger.error(f"❌ 层次化检索方法执行失败: {retrieval_error}")
-                logger.info("🔄 转为使用回退检索方法...")
+                logger.error(f"❌ Hierarchical retrieval method execution failed: {retrieval_error}")
+                logger.info("🔄 Switching to fallback retrieval method...")
                 results = await self._fallback_retrieval(question, query_entities)
             
-            # 确保results不为None
+            # Ensure results is not None
             if results is None:
-                logger.warning("⚠️ 检索方法返回None，使用回退结果")
+                logger.warning("⚠️ Retrieval method returned None, using fallback results")
                 results = await self._fallback_retrieval(question, query_entities)
             
             return results
@@ -143,25 +143,25 @@ class HKGraphTreeQuery(BaseQuery):
 
     def _validate_retrieval_results(self, results: Dict[str, Any]) -> bool:
         """
-        验证检索结果是否有效
+        Validate whether the retrieval results are valid.
         
         Args:
-            results: 检索结果
+            results: Retrieval results.
             
         Returns:
-            是否有效
+            Whether they are valid.
         """
         if not results or not isinstance(results, dict):
             return False
         
-        # 检查必要的字段是否存在
+        # Check if necessary fields exist
         required_fields = ['communities', 'entities', 'chunks', 'relationships', 'community_summaries']
         for field in required_fields:
             if field not in results:
                 logger.warning(f"Missing required field: {field}")
                 return False
         
-        # 检查是否有有效内容
+        # Check for valid content
         total_content = (len(results.get('communities', [])) + 
                         len(results.get('entities', [])) + 
                         len(results.get('chunks', [])))
@@ -174,7 +174,7 @@ class HKGraphTreeQuery(BaseQuery):
 
     def _get_empty_results(self) -> Dict[str, Any]:
         """
-        获取空的检索结果
+        Get empty retrieval results.
         """
         return {
             'communities': [],
@@ -186,16 +186,16 @@ class HKGraphTreeQuery(BaseQuery):
     
     async def _fallback_retrieval(self, question: str, query_entities: List[Dict]) -> Dict[str, Any]:
         """
-        回退检索方法，使用基础检索策略
+        Fallback retrieval method, using a basic retrieval strategy.
         """
-        logger.info("🔄 使用回退检索方法...")
+        logger.info("🔄 Using fallback retrieval method...")
         
         try:
             results = self._get_empty_results()
             
-            # 1. 处理查询实体
+            # 1. Process query entities
             if query_entities:
-                # 过滤掉太短的实体
+                # Filter out entities that are too short
                 valid_entities = []
                 for entity in query_entities:
                     if isinstance(entity, dict):
@@ -206,22 +206,22 @@ class HKGraphTreeQuery(BaseQuery):
                         valid_entities.append({
                             'entity_name': entity,
                             'entity_type': 'EXTRACTED',
-                            'description': f'从查询中提取的实体: {entity}'
+                            'description': f'Entity extracted from query: {entity}'
                         })
                 
                 results['entities'] = valid_entities[:5]
-                logger.info(f"📝 回退检索返回了 {len(results['entities'])} 个有效实体")
+                logger.info(f"📝 Fallback retrieval returned {len(results['entities'])} valid entities")
             
-            # 2. 尝试从已构建的图中获取一些示例数据
+            # 2. Try to get some sample data from the constructed graph
             try:
                 if hasattr(self, 'tree_retriever') and hasattr(self.tree_retriever, 'graph'):
                     graph = self.tree_retriever.graph
                     if graph:
-                        # 尝试获取图的基本信息
+                        # Try to get basic graph information
                         try:
                             all_nodes = await graph.get_nodes()
                             if all_nodes:
-                                # 获取前几个实体节点作为示例
+                                # Get the first few entity nodes as examples
                                 sample_entity_nodes = []
                                 for node_id in list(all_nodes)[:10]:
                                     if not node_id.startswith('CHUNK_') and not node_id.startswith('COMMUNITY_'):
@@ -230,26 +230,26 @@ class HKGraphTreeQuery(BaseQuery):
                                             sample_entity_nodes.append({
                                                 'entity_name': node_data.get('entity_name', node_id),
                                                 'entity_type': node_data.get('entity_type', 'GRAPH_ENTITY'),
-                                                'description': node_data.get('description', '图中的实体'),
+                                                'description': node_data.get('description', 'Entity in the graph'),
                                                 'source': 'graph_sample'
                                             })
                                 
                                 if sample_entity_nodes:
                                     results['entities'].extend(sample_entity_nodes[:3])
-                                    logger.info(f"📊 从图中添加了 {len(sample_entity_nodes[:3])} 个示例实体")
+                                    logger.info(f"📊 Added {len(sample_entity_nodes[:3])} sample entities from the graph")
                         except Exception as e:
-                            logger.warning(f"获取图节点失败: {e}")
+                            logger.warning(f"Failed to get graph nodes: {e}")
             except Exception as e:
-                logger.warning(f"访问图失败: {e}")
+                logger.warning(f"Failed to access graph: {e}")
             
-            # 3. 尝试获取文档块
+            # 3. Try to get document chunks
             try:
                 if hasattr(self, 'tree_retriever') and hasattr(self.tree_retriever, 'doc_chunk'):
                     doc_chunk = self.tree_retriever.doc_chunk
                     if doc_chunk:
                         sample_chunks = []
                         
-                        # 尝试不同的方法获取文档块
+                        # Try different methods to get document chunks
                         chunk_keys = []
                         if hasattr(doc_chunk, 'get_all_keys'):
                             try:
@@ -257,41 +257,41 @@ class HKGraphTreeQuery(BaseQuery):
                             except:
                                 pass
                         
-                        # 如果没有keys，尝试使用索引
+                        # If there are no keys, try using index
                         if not chunk_keys:
-                            for i in range(5):  # 尝试前5个索引
+                            for i in range(5):  # Try the first 5 indices
                                 try:
                                     chunk_content = await doc_chunk.get_data_by_index(i)
                                     if chunk_content:
                                         sample_chunks.append({
                                             'id': str(i),
-                                            'content': chunk_content[:800],  # 增加内容长度
+                                            'content': chunk_content[:800],  # Increase content length
                                             'type': 'chunk'
                                         })
                                 except:
                                     continue
                         else:
-                            # 使用keys获取内容
+                            # Get content using keys
                             for i, key in enumerate(chunk_keys[:3]):
                                 try:
                                     chunk_content = await doc_chunk.get_data_by_key(key)
                                     if chunk_content:
                                         sample_chunks.append({
                                             'id': key,
-                                            'content': chunk_content[:800],  # 增加内容长度
+                                            'content': chunk_content[:800],  # Increase content length
                                             'type': 'chunk'
                                         })
                                 except:
                                     continue
                         
                         results['chunks'] = sample_chunks
-                        logger.info(f"📄 回退检索返回了 {len(sample_chunks)} 个文档块")
+                        logger.info(f"📄 Fallback retrieval returned {len(sample_chunks)} document chunks")
             except Exception as e:
-                logger.warning(f"获取文档块失败: {e}")
+                logger.warning(f"Failed to get document chunks: {e}")
             
-            # 4. 确保至少有一些基础信息
+            # 4. Ensure there is at least some basic information
             if not results['entities'] and not results['chunks']:
-                # 如果什么都没有，至少提供查询关键词作为实体
+                # If there is nothing, at least provide the query keywords as entities
                 query_words = [word.strip() for word in question.split() 
                               if len(word.strip()) > 3 and word.strip().lower() not in 
                               ['what', 'where', 'when', 'who', 'why', 'how', 'does', 'was', 'were', 'are', 'the', 'and', 'for']]
@@ -301,23 +301,23 @@ class HKGraphTreeQuery(BaseQuery):
                     fallback_entities.append({
                         'entity_name': word,
                         'entity_type': 'KEYWORD',
-                        'description': f'从查询中提取的关键词: {word}'
+                        'description': f'Keyword extracted from query: {word}'
                     })
                 
                 results['entities'] = fallback_entities
-                logger.info(f"🎯 使用关键词回退，提取了 {len(fallback_entities)} 个关键词实体")
+                logger.info(f"🎯 Used keyword fallback, extracted {len(fallback_entities)} keyword entities")
             
             total_content = len(results['entities']) + len(results['chunks'])
-            logger.info(f"✅ 回退检索完成，总共返回 {total_content} 项内容")
+            logger.info(f"✅ Fallback retrieval completed, returned a total of {total_content} items")
             
             return results
             
         except Exception as e:
-            logger.error(f"回退检索也失败了: {e}")
-            # 最后的最后，至少返回一些查询关键词
+            logger.error(f"Fallback retrieval also failed: {e}")
+            # As a last resort, at least return some query keywords
             try:
                 query_words = [word.strip() for word in question.split() if len(word.strip()) > 3][:3]
-                fallback_entities = [{'entity_name': word, 'entity_type': 'KEYWORD', 'description': f'关键词: {word}'} for word in query_words]
+                fallback_entities = [{'entity_name': word, 'entity_type': 'KEYWORD', 'description': f'Keyword: {word}'} for word in query_words]
                 return {
                     'communities': [],
                     'entities': fallback_entities,
@@ -330,19 +330,19 @@ class HKGraphTreeQuery(BaseQuery):
 
     async def _build_context_from_results(self, retrieval_results: Dict[str, Any]) -> str:
         """
-        从RAPTOR式检索结果构建查询上下文
+        Build query context from RAPTOR-style retrieval results.
         """
-        #logger.info("📝 构建RAPTOR式查询上下文...")
+        #logger.info("📝 Building RAPTOR-style query context...")
         
         context_parts = []
-        max_context_length = getattr(self.config, 'max_token_for_text_unit', 4000) * 10 #TODO context 截断
+        max_context_length = getattr(self.config, 'max_token_for_text_unit', 4000) * 10 #TODO context truncation
         
-        # 1. 层次化社区信息（按层次和相似性排序）
+        # 1. Hierarchical community information (sorted by level and similarity)
         communities = retrieval_results.get('communities', [])
         if communities:
             context_parts.append("=== Hierarchical Community Analysis ===")
             
-            # 按层次分组
+            # Group by level
             level_groups = {}
             for community in communities:
                 level = community.get('level', 0)
@@ -350,14 +350,14 @@ class HKGraphTreeQuery(BaseQuery):
                     level_groups[level] = []
                 level_groups[level].append(community)
             
-            # 从高层到低层展示
+            # Display from high level to low level
             for level in sorted(level_groups.keys(), reverse=True):
                 level_communities = level_groups[level]
-                # 按相似性分数排序
+                # Sort by similarity score
                 level_communities.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
                 
                 context_parts.append(f"Level {level} Communities:")
-                for i, community in enumerate(level_communities[:1]):  # 每层最多1个
+                for i, community in enumerate(level_communities[:1]):  # Max 1 per level
                     score = community.get('similarity_score', 0)
                     context_parts.append(f"  Community {i+1} (Score: {score:.3f}, Members: {community.get('member_count', 0)}):")
                     if community.get('summary'):
@@ -367,11 +367,11 @@ class HKGraphTreeQuery(BaseQuery):
                         context_parts.append(f"    {summary}")
                 context_parts.append("")
         
-        # 2. 高相似性实体信息
+        # 2. High-similarity entity information
         entities = retrieval_results.get('entities', [])
         if entities:
             context_parts.append("=== Most Relevant Entities ===")
-            # 实体已经按相似性排序，直接使用
+            # Entities are already sorted by similarity, use directly
             for i, entity in enumerate(entities):
                 entity_name = entity.get('entity_name', 'N/A')
                 entity_type = entity.get('entity_type', '')
@@ -386,13 +386,13 @@ class HKGraphTreeQuery(BaseQuery):
                 context_parts.append(entity_info)
                 
                 if description:
-                    # 截断过长的描述
+                    # Truncate overly long descriptions
                     if len(description) > 150:
                         description = description[:150] + "..."
                     context_parts.append(f"   Description: {description}")
             context_parts.append("")
         
-        # 3. 关系网络信息
+        # 3. Relationship network information
         relationships = retrieval_results.get('relationships', [])
         if relationships:
             context_parts.append("=== Key Relationships ===")
@@ -411,38 +411,38 @@ class HKGraphTreeQuery(BaseQuery):
                     context_parts.append(f"   Context: {description}")
             context_parts.append("")
         
-        # 4. 最相关的文档内容
+        # 4. Most relevant document content
         chunks = retrieval_results.get('chunks', [])
         if chunks:
             context_parts.append("=== Most Relevant Documents ===")
-            # 文档块已经按相似性排序
+            # Document chunks are already sorted by similarity
             for i, chunk in enumerate(chunks):#TODO
                 score = chunk.get('similarity_score', 0)
                 content = chunk.get('content', '')
 
-                context = "\n".join(context_parts)  # context完整内容截断
+                context = "\n".join(context_parts)  # context full content truncation
                 if len(content) + len(context) > max_context_length:
                     break
                 
                 context_parts.append(f"Document {i+1} [Score: {score:.3f}]:")
                 
-                # 智能截断：保留重要部分 - 可配置版本
-                max_full_length = getattr(self.config, 'max_document_display_length', 8000)  # 允许完整显示的最大长度
-                max_smart_truncate_length = getattr(self.config, 'max_smart_truncate_length', 8000)  # 智能截断的阈值
-                head_chars = getattr(self.config, 'truncate_head_chars', 4000)  # 保留开头字符数
-                tail_chars = getattr(self.config, 'truncate_tail_chars', 3000)  # 保留结尾字符数
+                # Smart truncation: preserve important parts - configurable version
+                max_full_length = getattr(self.config, 'max_document_display_length', 8000)  # Max length for full display
+                max_smart_truncate_length = getattr(self.config, 'max_smart_truncate_length', 8000)  # Threshold for smart truncation
+                head_chars = getattr(self.config, 'truncate_head_chars', 4000)  # Number of characters to keep at the beginning
+                tail_chars = getattr(self.config, 'truncate_tail_chars', 3000)  # Number of characters to keep at the end
                 
                 if len(content) > max_full_length:
-                    # 智能截断：保留开头和结尾
+                    # Smart truncation: keep beginning and end
                     content = content[:head_chars] + "\n...[content truncated]...\n" + content[-tail_chars:]
                 elif len(content) > max_smart_truncate_length:
-                    # 简单截断：只保留开头
+                    # Simple truncation: keep only the beginning
                     content = content[:head_chars] + "..."
 
                 context_parts.append(content)
                 context_parts.append("")
         
-        # 5. 添加检索元信息
+        # 5. Add retrieval metadata
         total_items = len(communities) + len(entities) + len(chunks) + len(relationships)
         #total_items = 1 + len(entities) + 4 + len(relationships)
         if total_items > 0:
@@ -457,34 +457,34 @@ class HKGraphTreeQuery(BaseQuery):
         
         context = "\n".join(context_parts)
         
-        # 限制总长度
-        max_context_length = getattr(self.config, 'max_token_for_text_unit', 4000) * 10 #TODO context 截断
+        # Limit total length
+        max_context_length = getattr(self.config, 'max_token_for_text_unit', 4000) * 10 #TODO context truncation
         if len(context) > max_context_length:
             context = context[:max_context_length] + "\n...(content truncated for length)"
         
-        logger.info(f"📋 HKGraphTreeLSH上下文构建完成，长度: {len(context)} 字符，包含 {total_items} 项内容")
+        logger.info(f"📋 HKGraphTreeLSH context built, length: {len(context)} chars, containing {total_items} items")
         return context
 
     async def generation_qa(self, query: str, context: str) -> str:
         """
-        生成问答回复 - BaseQuery的抽象方法实现
+        Generate Q&A response - implementation of the abstract method from BaseQuery
         
         Args:
-            query: 用户查询问题
-            context: 检索到的上下文
+            query: User query question
+            context: Retrieved context
             
         Returns:
-            生成的回答
+            Generated answer
         """
-        logger.debug("🤖 开始生成问答回复...")
+        logger.debug("🤖 Starting Q&A response generation...")
         
         if not context or context.strip() == "":
-            return "Sorry, no relevant information was found to answer your question."
+            return "Sorry, no relevant information was found to answer the question."
         
         try:
-            # 构建提示词
-            system_prompt = self._build_system_prompt_for_qa_prompt_options_analyze_nm() #TODO 提示词
-            #system_prompt = ""
+            # Build prompt
+            system_prompt = self._build_system_prompt_for_qa_prompt_options_analyze_nm() #TODO prompt
+            
             # Build user message
             user_message = f"""
 Based on the following context information, please answer the user's question.
@@ -498,7 +498,7 @@ Give the best full answer amongst the option to question.(if the question is a o
 According to the retrieved context, please provide detailed and accurate answers.If the context does not contain sufficient information to answer the question, please state "Insufficient information". When possible, reference specific information from the context.
 """
             
-            # 调用LLM生成回答 # system_msgs=[system_prompt] if system_prompt else None 
+            # Call LLM to generate answer # system_msgs=[system_prompt] if system_prompt else None 
             if hasattr(self, 'llm') and self.llm:
                 #print(f"system_prompt: {system_prompt}\n")
                 # print(f"user_message: {user_message}\n") #TODO debuging
@@ -511,7 +511,7 @@ According to the retrieved context, please provide detailed and accurate answers
                 # Simple template response
                 response = f"Based on the retrieved information, here is the answer to the question '{query}':\n\n{context[:200]}..."
             
-            logger.debug("✅ 问答回复生成完成")
+            logger.debug("✅ Q&A response generated successfully")
             #print(f"response: {response}\n") #TODO debuging
             return response
             
@@ -521,22 +521,22 @@ According to the retrieved context, please provide detailed and accurate answers
 
     async def generation_summary(self, query: str, context: str) -> str:
         """
-        生成摘要 - BaseQuery的抽象方法实现
+        Generate summary - implementation of the abstract method from BaseQuery
         
         Args:
-            query: 用户查询问题
-            context: 检索到的上下文
+            query: User query question
+            context: Retrieved context
             
         Returns:
-            生成的摘要
+            Generated summary
         """
-        logger.info("📋 开始生成摘要...")
+        logger.info("📋 Starting summary generation...")
         
         if not context or context.strip() == "":
             return "Sorry, no relevant information was found to generate a summary."
         
         try:
-            # 构建摘要提示词
+            # Build summary prompt
             system_prompt = self._build_system_prompt_for_summary() #TODO
             
             # Build user message
@@ -551,7 +551,7 @@ Query topic: {query}
 Please generate a concise and comprehensive summary that highlights the most relevant points to the query.
 """
             
-            # 调用LLM生成摘要
+            # Call LLM to generate summary
             if hasattr(self, 'llm') and self.llm:
                 response = await self.llm.aask(
                     user_message,
@@ -561,7 +561,7 @@ Please generate a concise and comprehensive summary that highlights the most rel
                 # Simple template summary
                 response = f"Summary based on hierarchical retrieval:\n\n{context[:300]}..."
             
-            logger.info("✅ 摘要生成完成")
+            logger.info("✅ Summary generation completed")
             return response
             
         except Exception as e:
@@ -585,11 +585,10 @@ Rules:
 5. If none of the sections provide sufficient relevant evidence, explicitly state “Insufficient information”. After that, you may provide a plausible guess or hypothesis, clearly labeling it as a guess and separating it from the evidence-based answer. 
 6. Always state which section(s) support your answer.
         """
-#7. Give the best full answer amongst the option to question.
 
         return system_prompt
     
-    def _build_system_prompt_for_qa_prompt_options_analyze(self) -> str:  #TODO claude prompt analyze
+    def _build_system_prompt_for_qa_prompt_options_analyze(self) -> str: 
         """
         Build system prompt for Q&A (after modified)
         """
@@ -610,7 +609,7 @@ Response format: First analyze the evidence and reasoning process, then provide 
 
         return system_prompt
 
-    def _build_system_prompt_for_qa_prompt_options_analyze_nm(self) -> str:  #TODO claude prompt analyze
+    def _build_system_prompt_for_qa_prompt_options_analyze_nm(self) -> str:  
         """
         Build system prompt for Q&A (after modified)
         """
@@ -631,7 +630,7 @@ Response format: First analyze the evidence and reasoning process, then provide 
 
         return system_prompt
 
-    def _build_system_prompt_for_qa_prompt_options_analyze_noII(self) -> str:  #TODO claude prompt analyze
+    def _build_system_prompt_for_qa_prompt_options_analyze_noII(self) -> str:  
         """
         Build system prompt for Q&A (after modified)
         """
@@ -644,27 +643,6 @@ Rules:
 3. Use **Documents** for context or confirmation, but do not require them to validate relationship facts.  
 4. Report consistency across sources; if sources conflict, describe the discrepancy.  
 5. Do not make up. 
-6. You need to analyze based on the original text, not over-interpret it.
-
-Response format: First analyze the evidence and reasoning process, then provide your answer with source attribution.
-
-"""
-
-        return system_prompt
-
-    def _build_system_prompt_for_qa_prompt_options_analyze_debug(self) -> str:  #TODO claude prompt analyze
-        """
-        Build system prompt for Q&A (after modified)
-        """
-        system_prompt = """
-You are an intelligent RAG Q&A assistant using hierarchical knowledge graphs.
-
-Rules:
-1. Consider **Entities**, **Key Relationships**, **Documents**, and **Community Summaries** together.  
-2. If a fact appears in **Key Relationships**, treat it as the most reliable source of truth, even if it seems unusual or is not repeated elsewhere. Do not override it with everyday common-sense assumptions.  
-3. Use **Documents** for context or confirmation, but do not require them to validate relationship facts.  
-4. Report consistency across sources; if sources conflict, describe the discrepancy.  
-5. If none of the sections provide sufficient relevant evidence, explicitly state “Insufficient information”. After that, you may provide a plausible guess or hypothesis, clearly labeling it as a guess and separating it from the evidence-based answer.  
 6. You need to analyze based on the original text, not over-interpret it.
 
 Response format: First analyze the evidence and reasoning process, then provide your answer with source attribution.

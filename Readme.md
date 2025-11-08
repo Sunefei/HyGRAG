@@ -40,7 +40,7 @@ llm:
 
 #### 1. start HyGRAG
 ```bash
-python main.py -opt Option/Ours/HKGraphTreeLSH.yaml -dataset_name multihop-rag
+python main.py -opt Option/Data/multihop-rag.yaml -dataset_name multihop-rag
 ```
 
 #### 2. incremental test

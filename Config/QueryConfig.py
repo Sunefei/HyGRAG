@@ -73,7 +73,7 @@ class QueryConfig(YamlModel):
     max_tree_search_depth: int = 3
     tree_search_breadth: int = 5
     
-    # 结果限制设置
+    # Result limit settings
     # max_communities_in_context: int = 3
     # max_entities_in_context: int = 5
     # max_relationships_in_context: int = 5

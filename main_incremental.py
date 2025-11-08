@@ -1,12 +1,10 @@
 """
-HKGraphTree增量更新测试程序
+HyGRAG incremental update test program
 
-测试EraRAG TreeGraphDynamic增量更新算法在HKGraphTree中的集成效果
-
-使用方法:
-1. 初始构建: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode build
-2. 增量更新: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode incremental
-3. 性能测试: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode benchmark
+Usage:
+1. Initial build: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode build
+2. Incremental update: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode incremental
+3. Performance benchmark: python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_name multihop-rag -mode benchmark
 """
 
 import os
@@ -31,23 +29,23 @@ from Core.Common.Logger import logger
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="HKGraphTree增量更新测试程序")
-    parser.add_argument("-opt", type=str, required=True, help="配置文件路径")
-    parser.add_argument("-dataset_name", type=str, required=True, help="数据集名称")
+    parser = argparse.ArgumentParser(description="HyGRAG incremental update test program")
+    parser.add_argument("-opt", type=str, required=True, help="Configuration file path")
+    parser.add_argument("-dataset_name", type=str, required=True, help="Dataset name")
     parser.add_argument("-mode", type=str, choices=["build", "incremental", "benchmark", "query"], 
-                       default="build", help="运行模式")
+                       default="build", help="Run mode")
     parser.add_argument("-incremental_ratio", type=float, default=0.2, 
-                       help="增量更新的数据比例 (0.1 = 10%)")
-    parser.add_argument("-root", type=str, default="", help="结果目录前缀")
-    parser.add_argument("-enable_query", type=str, default="1", help="是否运行查询评估")
+                       help="Incremental update data ratio (0.1 = 10%)")
+    parser.add_argument("-root", type=str, default="", help="Result directory prefix")
+    parser.add_argument("-enable_query", type=str, default="1", help="Whether to run query evaluation")
     return parser.parse_args()
 
 
 def check_dirs(opt, root, mode, opt_path):
-    """创建结果目录"""
+    """Create result directories"""
     base_dir = os.path.join(opt.working_dir, opt.exp_name, root) if root else os.path.join(opt.working_dir, opt.exp_name)
     
-    # 根据模式创建不同的子目录
+    # Create different subdirectories based on mode
     mode_suffix = f"_{mode}" if mode != "build" else ""
     result_dir = os.path.join(base_dir, f"Results{mode_suffix}")
     config_dir = os.path.join(base_dir, f"Configs{mode_suffix}")
@@ -57,7 +55,7 @@ def check_dirs(opt, root, mode, opt_path):
     os.makedirs(config_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
     
-    # 复制配置文件
+    # Copy configuration files
     opt_name = opt_path[opt_path.rindex("/") + 1:]
     basic_name = os.path.join(opt_path.split("/")[0], "Config2.yaml")
     
@@ -69,22 +67,22 @@ def check_dirs(opt, root, mode, opt_path):
 
 def split_dataset_for_incremental(corpus, incremental_ratio=0.2):
     """
-    将数据集分为初始构建集和增量更新集
+    Split dataset into initial build set and incremental update set
     
     Args:
-        corpus: 完整语料库
-        incremental_ratio: 增量数据的比例
+        corpus: Complete corpus
+        incremental_ratio: Proportion of incremental data
         
     Returns:
-        (initial_corpus, incremental_corpus): 初始语料库和增量语料库
+        (initial_corpus, incremental_corpus): Initial corpus and incremental corpus
     """
     total_size = len(corpus)
     incremental_size = int(total_size * incremental_ratio)
     initial_size = total_size - incremental_size
     
-    logger.info(f"数据集划分: 总计{total_size}, 初始{initial_size}, 增量{incremental_size}")
+    logger.info(f"Dataset split: Total {total_size}, Initial {initial_size}, Incremental {incremental_size}")
     
-    # 简单按顺序分割，实际应用中可能需要更复杂的策略
+    # Simple sequential split, more complex strategies may be needed in practice
     initial_corpus = corpus[:initial_size]
     incremental_corpus = corpus[initial_size:]
     
@@ -92,47 +90,47 @@ def split_dataset_for_incremental(corpus, incremental_ratio=0.2):
 
 
 async def build_initial_graph(digimon, initial_corpus):
-    """构建初始图结构"""
-    logger.info(f"🏗️ 开始构建初始图结构，包含{len(initial_corpus)}个文档")
+    """Build initial graph structure"""
+    logger.info(f"🏗️ Starting initial graph construction with {len(initial_corpus)} documents")
     
     start_time = time.time()
     await digimon.insert(initial_corpus)
     build_time = time.time() - start_time
     
-    # 获取图统计信息
+    # Get graph statistics
     if hasattr(digimon.graph, 'get_incremental_statistics'):
         stats = digimon.graph.get_incremental_statistics()
-        logger.info(f"📊 初始图构建统计: {stats}")
+        logger.info(f"📊 Initial graph construction statistics: {stats}")
     
-    logger.info(f"✅ 初始图构建完成，耗时: {build_time:.2f}秒")
+    logger.info(f"✅ Initial graph construction completed, time: {build_time:.2f} seconds")
     return build_time, stats if 'stats' in locals() else {}
 
 
 
 async def insert_incremental_update(digimon, incremental_corpus):
-    """执行语料插入更新"""
-    logger.info(f"🔄 开始增量更新，添加{len(incremental_corpus)}个新文档")
+    """Execute corpus insertion update"""
+    logger.info(f"🔄 Starting incremental update, adding {len(incremental_corpus)} new documents")
     
     if not hasattr(digimon.graph, 'insert_incremental'):
-        logger.error("❌ 当前图类型不支持增量更新")
+        logger.error("❌ Current graph type does not support incremental update")
         return None, {}
     
     start_time = time.time()
     
     try:
-        # Step 1: 使用专门的增量更新方法处理chunk存储
-        logger.info("📝 增量更新chunk存储（保护现有数据）...")
+        # Step 1: Use specialized incremental update method to handle chunk storage
+        logger.info("📝 Incremental update chunk storage (protect existing data)...")
         
-        # 使用新的update_chunks方法，只处理新文档，不影响现有chunk
+        # Use new update_chunks method, only process new documents, don't affect existing chunks
         new_chunks = await digimon.doc_chunk.update_chunks(incremental_corpus)
         
-        # Step 2: 获取新增的chunk数据并执行图增量更新
+        # Step 2: Get newly added chunk data and execute graph incremental update
         if new_chunks:
-            # 获取所有chunk数据，找出新增的chunk
+            # Get all chunk data, find newly added chunks
             all_chunks = await digimon.doc_chunk.get_chunks()
             new_chunk_items = []
             
-            # 根据new_chunks中的chunk_id找到对应的(key, TextChunk)对
+            # Find corresponding (key, TextChunk) pairs based on chunk_id in new_chunks
             new_chunk_ids = {chunk["chunk_id"] for chunk in new_chunks}
             
             if all_chunks:
@@ -142,33 +140,33 @@ async def insert_incremental_update(digimon, incremental_corpus):
                         if chunk_key in new_chunk_ids:
                             new_chunk_items.append((chunk_key, chunk_obj))
             
-            logger.info(f"🔧 执行图增量更新，处理{len(new_chunk_items)}个新chunk...")
+            logger.info(f"🔧 Execute graph incremental update, processing {len(new_chunk_items)} new chunks...")
             success = await digimon.graph.insert_incremental(new_chunk_items)
         else:
-            logger.info("📝 没有新增chunk，跳过图更新")
+            logger.info("📝 No new chunks, skip graph update")
             success = True
         #success = True
         update_time = time.time() - start_time
         
         if success:
-            # 获取更新后的统计信息
+            # Get updated statistics
             stats = digimon.graph.get_incremental_statistics()
-            logger.info(f"📊 语料插入更新后统计: {stats}")
-            logger.info(f"✅ 语料插入更新成功，耗时: {update_time:.2f}秒")
+            logger.info(f"📊 Statistics after corpus insertion update: {stats}")
+            logger.info(f"✅ Corpus insertion update successful, time: {update_time:.2f} seconds")
             return update_time, stats
         else:
-            logger.error("❌ 语料插入更新失败")
+            logger.error("❌ Corpus insertion update failed")
             return None, {}
 
     except Exception as e:
-        logger.error(f"❌ 语料插入更新过程中出错: {e}")
+        logger.error(f"❌ Error during corpus insertion update: {e}")
         return None, {}
 
 async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_corpus):
     """
-    对比增量更新和全量重构的性能
+    Compare performance between incremental update and full rebuild
     """
-    logger.info("🏁 开始性能基准测试")
+    logger.info("🏁 Starting performance benchmark test")
     
     results = {
         'initial_build': {},
@@ -177,15 +175,15 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
         'comparison': {}
     }
     
-    # 1. 构建初始图
-    logger.info("Step 1: 构建初始图")
+    # 1. Build initial graph
+    logger.info("Step 1: Build initial graph")
     initial_time, initial_stats = await build_initial_graph(digimon, initial_corpus)
     results['initial_build'] = {
         'time': initial_time,
         'stats': initial_stats
     }
     
-    # 2. 保存初始状态（用于后续对比）
+    # 2. Save initial state (for subsequent comparison)
     if hasattr(digimon.graph._graph, 'save_metadata'):
         digimon.graph._graph.save_metadata({
             'stage': 'initial_build',
@@ -193,8 +191,8 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
             'build_time': initial_time
         })
     
-    # 3. 执行增量更新
-    logger.info("Step 2: 执行增量更新")
+    # 3. Execute incremental update
+    logger.info("Step 2: Execute incremental update")
     incremental_time, incremental_stats = await insert_incremental_update(digimon, incremental_corpus)
     if incremental_time is not None:
         results['incremental_update'] = {
@@ -202,15 +200,15 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
             'stats': incremental_stats
         }
     
-    # 4. 重新构建图（全量）进行对比
-    logger.info("Step 3: 全量重构用于对比")
+    # 4. Rebuild graph (full) for comparison
+    logger.info("Step 3: Full rebuild for comparison")
     full_corpus = initial_corpus + incremental_corpus
     
-    # 清理现有图
+    # Clear existing graph
     if hasattr(digimon.graph, 'clear'):
         digimon.graph.clear()
     
-    # 强制重构
+    # Force rebuild
     original_force = digimon.config.graph.force
     digimon.config.graph.force = True
     
@@ -218,7 +216,7 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
     await digimon.insert(full_corpus)
     full_rebuild_time = time.time() - start_time
     
-    # 恢复原始设置
+    # Restore original settings
     digimon.config.graph.force = original_force
     
     if hasattr(digimon.graph, 'get_incremental_statistics'):
@@ -231,7 +229,7 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
         'stats': full_rebuild_stats
     }
     
-    # 5. 计算对比结果
+    # 5. Calculate comparison results
     if incremental_time is not None:
         total_incremental_time = initial_time + incremental_time
         speedup = full_rebuild_time / total_incremental_time
@@ -245,50 +243,50 @@ async def benchmark_incremental_vs_full(digimon, initial_corpus, incremental_cor
             'time_saved': full_rebuild_time - total_incremental_time
         }
         
-        logger.info(f"📈 性能对比结果:")
-        logger.info(f"   增量更新总时间: {total_incremental_time:.2f}秒")
-        logger.info(f"   全量重构时间: {full_rebuild_time:.2f}秒")
-        logger.info(f"   性能提升: {speedup:.2f}x")
-        logger.info(f"   效率提升: {efficiency:.1f}%")
-        logger.info(f"   节省时间: {full_rebuild_time - total_incremental_time:.2f}秒")
+        logger.info(f"📈 Performance comparison results:")
+        logger.info(f"   Total incremental time: {total_incremental_time:.2f} seconds")
+        logger.info(f"   Full rebuild time: {full_rebuild_time:.2f} seconds")
+        logger.info(f"   Performance improvement: {speedup:.2f}x")
+        logger.info(f"   Efficiency improvement: {efficiency:.1f}%")
+        logger.info(f"   Time saved: {full_rebuild_time - total_incremental_time:.2f} seconds")
     
     return results
 
 
 async def wrapper_query(query_dataset, digimon, result_dir, mode=""):
-    """执行查询测试"""
+    """Execute query test"""
     all_res = []
     
-    dataset_len = min(len(query_dataset), 3702)  # 限制测试数量
+    dataset_len = min(len(query_dataset), 3702)  # Limit test count
     
-    logger.info(f"🔍 开始查询测试，模式: {mode}, 测试{dataset_len}个问题")
+    logger.info(f"🔍 Starting query test, mode: {mode}, testing {dataset_len} questions")
     
     for i in range(dataset_len):
         query = query_dataset[i]
-        logger.info(f"正在处理问题 {i+1}/{dataset_len}...")
+        logger.info(f"Processing question {i+1}/{dataset_len}...")
         
         try:
             res = await digimon.query(query["question"])
             query["output"] = res
-            query["mode"] = mode  # 标记查询模式
+            query["mode"] = mode  # Mark query mode
             all_res.append(query)
         except Exception as e:
-            logger.error(f"查询 {i+1} 失败: {e}")
+            logger.error(f"Query {i+1} failed: {e}")
             query["output"] = f"Error: {str(e)}"
             query["mode"] = mode
             all_res.append(query)
     
-    # 保存结果
+    # Save results
     all_res_df = pd.DataFrame(all_res)
     save_path = os.path.join(result_dir, f"results_{mode}.json" if mode else "results.json")
     all_res_df.to_json(save_path, orient="records", lines=True)
     
-    logger.info(f"✅ 查询测试完成，结果保存到: {save_path}")
+    logger.info(f"✅ Query test completed, results saved to: {save_path}")
     return save_path
 
 
 async def wrapper_evaluation(path, opt, result_dir, mode=""):
-    """执行评估"""
+    """Execute evaluation"""
     try:
         eval = Evaluator(path, opt.dataset_name)
         res_dict = await eval.evaluate()
@@ -297,42 +295,45 @@ async def wrapper_evaluation(path, opt, result_dir, mode=""):
         with open(save_path, "w") as f:
             json.dump(res_dict, f, indent=2)
         
-        logger.info(f"✅ 评估完成，结果保存到: {save_path}")
+        logger.info(f"✅ Evaluation completed, results saved to: {save_path}")
         return res_dict
     except Exception as e:
-        logger.error(f"评估失败: {e}")
+        logger.error(f"Evaluation failed: {e}")
         return {}
 
 
 async def main():
-    """主函数"""
+    """
+    Main function
+    """
+    # Parse arguments
     args = parse_args()
     
-    # 解析配置
+    # Load configuration
     opt = Config.parse(Path(args.opt), dataset_name=args.dataset_name)
     
-    # 检查是否为增量更新配置
+    # Check if it is incremental update configuration
     if opt.graph.graph_type != "hk_graph_tree_dynamic":
-        logger.error(f"错误: 配置文件的graph_type应为'hk_graph_tree_dynamic'，当前为'{opt.graph.graph_type}'")
+        logger.error(f"Error: graph_type in config should be 'hk_graph_tree_dynamic', current is '{opt.graph.graph_type}'")
         return
     
-    # 创建目录
+    # Create directories
     result_dir = check_dirs(opt, args.root, args.mode, args.opt)
     
-    # 创建GraphRAG实例
+    # Create GraphRAG instance
     digimon = GraphRAG(config=opt)
     
-    # 加载数据集
+    # Load dataset
     query_dataset = RAGQueryDataset(
         data_dir=os.path.join(opt.data_root, opt.dataset_name)
     )
     corpus = query_dataset.get_corpus()
-    logger.info(f"加载数据集: {len(corpus)} 个文档")
+    logger.info(f"Loaded dataset: {len(corpus)} documents")
     
-    # 根据模式执行不同操作
+    # Execute different operations based on mode
     if args.mode == "build":
-        # 模式1: 仅构建初始图
-        logger.info("🏗️ 模式: 构建初始图")
+        # Mode 1: Build initial graph only
+        logger.info("🏗️ Mode: Build initial graph")
         await build_initial_graph(digimon, corpus)
         
         if args.enable_query == "1":
@@ -340,18 +341,18 @@ async def main():
             await wrapper_evaluation(save_path, opt, result_dir, "initial")
     
     elif args.mode == "incremental":
-        # 模式2: 增量更新测试
-        logger.info("🔄 模式: 增量更新测试")
+        # Mode 2: Incremental update test
+        logger.info("🔄 Mode: Incremental update test")
         
-        # 分割数据集
+        # Split dataset
         initial_corpus, incremental_corpus = split_dataset_for_incremental(
             corpus, args.incremental_ratio
         )
         
-        # 构建初始图
+        # Build initial graph
         await build_initial_graph(digimon, initial_corpus)
         
-        # 执行增量更新
+        # Execute incremental update
         await insert_incremental_update(digimon, incremental_corpus)
         
         if args.enable_query == "1":
@@ -359,69 +360,69 @@ async def main():
             await wrapper_evaluation(save_path, opt, result_dir, "incremental")
     
     elif args.mode == "benchmark":
-        # 模式3: 性能基准测试
-        logger.info("🏁 模式: 性能基准测试")
+        # Mode 3: Performance benchmark test
+        logger.info("🏁 Mode: Performance benchmark test")
         
-        # 分割数据集
+        # Split dataset
         initial_corpus, incremental_corpus = split_dataset_for_incremental(
             corpus, args.incremental_ratio
         )
         
-        # 执行基准测试
+        # Execute benchmark test
         benchmark_results = await benchmark_incremental_vs_full(
             digimon, initial_corpus, incremental_corpus
         )
         
-        # 保存基准测试结果
+        # Save benchmark results
         benchmark_path = os.path.join(result_dir, "benchmark_results.json")
         with open(benchmark_path, 'w') as f:
             json.dump(benchmark_results, f, indent=2)
         
-        logger.info(f"📊 基准测试结果保存到: {benchmark_path}")
+        logger.info(f"📊 Benchmark results saved to: {benchmark_path}")
         
         if args.enable_query == "1":
             save_path = await wrapper_query(query_dataset, digimon, result_dir, "benchmark")
             await wrapper_evaluation(save_path, opt, result_dir, "benchmark")
     
     elif args.mode == "query":
-        # 模式4: 仅查询测试（需要已有图）
-        logger.info("🔍 模式: 查询测试")
+        # Mode 4: Query test only (requires existing graph)
+        logger.info("🔍 Mode: Query test")
         
-        # 尝试加载现有图
+        # Try to load existing graph
         if hasattr(digimon.graph, '_load_graph'):
             loaded = await digimon.graph._load_graph(force=False)
             if not loaded:
-                logger.error("❌ 未找到已构建的图，请先运行build模式")
+                logger.error("❌ No existing graph found, please run build mode first")
                 return
         
-        # 关键修复：加载现有的chunk数据和构建查询器上下文
-        logger.info("🔧 加载现有chunk数据和构建查询器上下文...")
+        # Key fix: Load existing chunk data and build retriever context
+        logger.info("🔧 Loading existing chunk data and building retriever context...")
         try:
-            # 加载现有的chunk数据（不重新构建）
+            # Load existing chunk data (do not rebuild)
             chunk_loaded = await digimon.doc_chunk._load_chunk(force=False)
             if not chunk_loaded:
-                logger.error("❌ 未找到已有的chunk数据，请先运行完整的增量更新")
+                logger.error("❌ No existing chunk data found, please run complete incremental update first")
                 return
-            logger.info("✅ 成功加载现有chunk数据")
+            logger.info("✅ Successfully loaded existing chunk data")
             
-            # 如果需要实体链接映射，加载现有的映射数据
+            # Load existing mapping data if entity link chunk is needed
             if digimon.config.use_entity_link_chunk:
                 await digimon.build_e2r_r2c_maps(force=False)
-                logger.info("✅ 成功加载实体链接映射数据")
+                logger.info("✅ Successfully loaded entity link mapping data")
             
-            # 构建查询器上下文（关键步骤）
+            # Build retriever context (key step)
             await digimon._build_retriever_context()
-            logger.info("✅ 查询器上下文构建完成")
+            logger.info("✅ Retriever context built successfully")
             
         except Exception as e:
-            logger.error(f"❌ 构建查询器上下文失败: {e}")
+            logger.error(f"❌ Failed to build retriever context: {e}")
             return
         
         if args.enable_query == "1":
             save_path = await wrapper_query(query_dataset, digimon, result_dir, "query_only")
             await wrapper_evaluation(save_path, opt, result_dir, "query_only")
     
-    logger.info("✅ 程序执行完成")
+    logger.info("✅ Program execution completed")
 
 
 if __name__ == "__main__":

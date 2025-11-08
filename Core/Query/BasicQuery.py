@@ -64,9 +64,9 @@ class BasicQuery(BaseQuery):
             query = await self.extract_query_keywords(query)
 
         node_datas = await self._retriever.retrieve_relevant_content(seed=query, type=Retriever.ENTITY, mode="vdb")
-        # 防御：为空则用空列表，避免下游遍历 None
+        # Defensive: if empty, use an empty list to prevent downstream iteration over None
         node_datas = node_datas or []
-        # 默认空列表，避免未赋值异常
+        # Default to an empty list to avoid unassigned exceptions
         use_communities = []
 
         if self.config.use_communiy_info:

@@ -1,9 +1,9 @@
 import os
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'  # 新增：设置 HF 镜像站
+os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'  # New: Set HF mirror site
 import warnings
-warnings.filterwarnings("ignore") # 忽略warning
+warnings.filterwarnings("ignore") # Ignore warnings
 import nltk
-nltk.data.path.append('/data/zhy/nltk_data') #本地缓存nltk数据库
+nltk.data.path.append('/data/zhy/nltk_data') # Local cache for nltk database
 
 from Core.GraphRAG import GraphRAG
 from Option.Config2 import Config
@@ -40,13 +40,13 @@ def wrapper_query(query_dataset, digimon, result_dir):
 
     dataset_len = len(query_dataset)
     #dataset_len = 400 #TODO 减少测试集长度
-    dataset_len = min(len(query_dataset), 500)  # 注释掉限制，处理完整数据集
+    dataset_len = min(len(query_dataset), 500)  # Remove limit, process complete dataset
     
     for _, i in enumerate(range(dataset_len)):
         query = query_dataset[i]
-        # 添加问题编号的日志输出
+        # Add log output with question number
         from Core.Common.Logger import logger
-        logger.info(f"正在处理问题 {i+1}/{dataset_len}...")
+        logger.info(f"Processing question {i+1}/{dataset_len}...")
         
         res = asyncio.run(digimon.query(query["question"]))
         query["output"] = res
@@ -84,7 +84,7 @@ if __name__ == "__main__":
         data_dir=os.path.join(opt.data_root, opt.dataset_name)
     )
     corpus = query_dataset.get_corpus()
-    # corpus = corpus[:10]
+    # corpus = corpus[:10] # Limit corpus size for testing
 
     asyncio.run(digimon.insert(corpus))
 

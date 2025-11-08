@@ -143,7 +143,7 @@ Please extract entities:
             
             triples = []
             
-            # 处理不同类型的响应
+            # Handle different response types
             if isinstance(response, dict):
                 if 'triples' in response:
                     for triple_data in response['triples']:
@@ -155,7 +155,7 @@ Please extract entities:
                         )
                         triples.append(triple)
             elif isinstance(response, str):
-                # 尝试解析字符串格式的JSON
+                # Try to parse string format JSON
                 try:
                     import json
                     parsed_response = json.loads(response)
@@ -196,12 +196,12 @@ Please extract entities:
             
             entities = []
             
-            # 处理不同类型的响应
+            # Handle different response types
             if isinstance(response, dict):
                 if 'entities' in response:
                     entities = [clean_str(entity) for entity in response['entities']]
             elif isinstance(response, str):
-                # 尝试解析字符串格式的JSON
+                # Try to parse string format JSON
                 try:
                     import json
                     parsed_response = json.loads(response)
@@ -212,7 +212,7 @@ Please extract entities:
             else:
                 logger.warning(f"⚠️ Unexpected entity response type: {type(response)}")
             
-            # 如果仍然没有提取到实体，使用关键词分割作为最后的回退
+            # If no entities are extracted, use keyword splitting as a final fallback
             if not entities:
                 entities = [word.strip() for word in query.split() if len(word.strip()) > 2]
                 logger.info(f"🔄 Using keyword fallback, extracted {len(entities)} entities")

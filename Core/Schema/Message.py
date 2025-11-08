@@ -246,7 +246,7 @@ class AIMessage(Message):
 
 
 
-# 定义一个泛型类型变量
+# Define a generic type variable
 T = TypeVar("T", bound="BaseModel")
 
 

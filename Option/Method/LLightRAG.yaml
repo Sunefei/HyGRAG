@@ -55,7 +55,7 @@ query:
     augmentation_ppr: True
     response_type: Multiple Paragraphs
     level: 2
-    community_information: True #只是为了选用“本地回答模板”，不代表在图构建阶段真的开启了社区。
+    community_information: True # This is only to select the 'local answer template' and does not mean that the community is actually enabled in the graph construction phase.
     retrieve_top_k: 20
     # naive search
     naive_max_token_for_text_unit: 12000

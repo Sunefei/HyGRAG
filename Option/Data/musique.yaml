@@ -1,0 +1,152 @@
+################################# HK Graph Tree with Cleora + LSH Settings  #################################
+# Basic Configuration
+use_entities_vdb: False                     # Whether to enable entity vector database for entity similarity retrieval
+use_relations_vdb: False                   # Whether to enable relation vector database, can be set to True for advanced retrieval
+llm_model_max_token_size: 32768           # Maximum token limit for the LLM model, controlling the length of input text
+use_entity_link_chunk: True               # Enable entity-chunk link mapping, supporting entity traceability in HK graph
+enable_graph_augmentation: False          # Enable graph augmentation by adding extra edges based on entity similarity (hipporag)
+
+# Data Configuration
+index_name: hk_graph_tree_cleora_lsh_th3      # Index name to identify the current experiment configuration
+
+vdb_type: faiss  # vector/colbert
+
+token_model: gpt-3.5-turbo
+
+# Chunk Configuration
+chunk:
+  chunk_token_size: 1200                   # Token size for each document chunk, affecting the granularity of graph construction
+  chunk_overlap_token_size: 100            # Number of overlapping tokens between adjacent document chunks to ensure information continuity
+  chunk_method: chunking_by_token_size     # Chunking method: based on the number of tokens
+
+# Graph Configuration
+graph:
+    # Graph Construction Basic Settings
+    enable_entity_description: True          # Enable entity description generation to enhance semantic representation of entities
+    graph_type: hk_graph_tree                # Graph type: hk_graph_tree - Hierarchical Hybrid Knowledge Graph
+    force: False                             # Whether to force graph reconstruction, False will reuse existing graphs
+    
+    # HK Graph Specific Configurations
+    # Entity-Relation Extraction Settings
+    extract_two_step: True                   # Enable two-step extraction: first NER (Named Entity Recognition), then OpenIE (Open Information Extraction)
+    max_gleaning: 1                          # Maximum number of information gathering rounds, controlling the number of extraction iterations
+    enable_entity_type: True                 # Enable entity type labeling, such as person, location, organization, etc.
+    enable_edge_description: True            # Enable generation of descriptions for relationship edges
+    enable_edge_name: True                   # Enable naming of relationship edges
+    
+    # Paragraph-level Entity Linking Settings
+    use_wat_linking: False                   # Whether to use the WAT entity linking system to link to Wikipedia
+    prior_prob: 0.8                         # Minimum probability threshold for entity linking, a link is established only if the probability is higher than this value
+    
+    # Cleora Embedding Configuration
+    cleora_dim: 1024                          # Cleora embedding dimension
+    cleora_iterations: 2                     # Number of Cleora iterations, controlling the depth of neighbor information aggregation
+    
+    # LSH Clustering Configuration
+    lsh_num_hyperplanes: 16 #16                  # Number of LSH hyperplanes, affecting hash precision
+    lsh_min_cluster_size: 5                  # Minimum LSH cluster size
+    lsh_max_cluster_size: 50                 # Maximum LSH cluster size
+    
+    # Hierarchical Configuration
+    max_hierarchy_levels: 4                  # Maximum number of hierarchy levels
+    community_summary_length: 300           # Maximum length of community summaries
+    random_seed: 42                          # Random seed to ensure reproducible results
+    
+    # General Settings
+    summary_max_tokens: 500                  # Maximum number of tokens for entity/relation summaries
+    llm_model_max_token_size: 32768         # Maximum token limit for the LLM during the graph construction phase
+    
+    # Chunk-Chunk Connection Settings
+    shared_entity_threshold: 3  #1             # Minimum number of shared entities required to establish a chunk-chunk connection
+    
+    # FAISS Vector Index Configuration
+    faiss_index_type: HNSW                     # FAISS index type options:
+                                               # - HNSW: HNSW+L2 distance (fast, smaller distance means more similar)
+                                               # - HNSW_IP: HNSW+Inner Product (fast, larger score means more similar)  
+                                               # - FLAT: Brute-force search+Inner Product (accurate, larger score means more similar)
+                                               # - FLAT_L2: Brute-force search+L2 distance (accurate, smaller distance means more similar)
+    faiss_hnsw_m: 64                           # HNSW algorithm M parameter, controlling connectivity (improves quality)
+    faiss_hnsw_ef_construction: 500            # HNSW efConstruction parameter during construction
+    faiss_hnsw_ef_search: 200                   # HNSW efSearch parameter during search
+    faiss_index_path: "./faiss_index_th3/musique"     # FAISS index save path
+
+# Retrieval Configuration
+retriever:
+    query_type: hk_tree                      # Retrieval type: use HKGraphTree hierarchical retrieval method
+    
+    # Hierarchical Retrieval Settings
+    enable_hierarchical_retrieval: True     # Enable hierarchical retrieval
+    hierarchy_search_levels: 3              # Number of hierarchy levels to search
+    community_boost_factor: 1.2             # Community node weight boost factor
+    hk_tree_retrieval_method: hk_tree_flat_search  # Retrieval strategy: hk_tree_search, hk_tree_top_down, hk_tree_comprehensive, hk_tree_true_search, hk_tree_flat_search
+    
+    # Tree Search Specific Settings
+    top_k: 5                               # Number of top results to return per level
+    max_communities_per_level: 5            # Maximum number of communities per level
+    max_expansion_depth: 3                   # Maximum expansion depth
+    community_relevance_threshold: 0.3      # Community relevance threshold
+    
+    # PPR Compatibility Settings (for fallback)
+    enable_local: False                      # Whether to enable local retrieval mode
+    use_entity_similarity_for_ppr: False     # Whether to use entity similarity weights in PPR
+    top_k_entity_for_ppr: 8                 # Number of seed entities for the PPR algorithm, affecting the retrieval scope
+    node_specificity: True                   # Enable node specificity weights, common entities have lower weights
+    damping: 0.1                            # PPR damping factor, controlling the restart probability of the random walk
+    
+    # True Tree Search Settings (similar to EraRAG LSH)
+    # custom_search: True                       # Enable custom tree search
+    # portion: 0.8                            # Leaf node proportion (80% leaf nodes, 20% non-leaf nodes)
+    
+    # Context Token Limits
+    max_token_for_local_context: 4000       # Maximum number of tokens for local context
+    max_token_for_global_context: 8000      # Maximum number of tokens for global context
+    
+    # Entity and Relation Token Limits
+    entities_max_tokens: 2000               # Maximum number of tokens for entity information
+    relationships_max_tokens: 2000          # Maximum number of tokens for relationship information
+
+# Query Configuration
+query: 
+    query_type: qa                           # Query type: qa (question answering) or summary
+    only_need_context: False                 # Whether to only return the context without LLM generation
+    enable_hybrid_query: True                # Enable hybrid query, combining multiple retrieval strategies
+    level: 2                                 # Query complexity level, affecting retrieval depth
+    top_k: 5                                # Number of candidate results, optimized to 5 for better precision
+    k_nei: 3                                # Number of k-neighbors for graph traversal
+    
+    # Hierarchical Query Settings
+    enable_community_context: True          # Enable community context
+    community_context_levels: 3             # Number of community context levels
+    hk_tree_retrieval_method: hk_tree_flat_search  # Retrieval strategy configuration
+    enable_entity_extraction: True          # Enable query entity extraction
+    
+    # Tree Search Query Settings
+    tree_search: True                        # Enable tree search
+    max_tree_search_depth: 3                # Maximum tree search depth
+    tree_search_breadth: 5                  # Tree search breadth (number of nodes per level)
+    
+    # IR-CoT Iterative Reasoning Chain Configuration (for compatibility)
+    enable_ir_cot: True                      # Enable IR-CoT iterative reasoning chain to enhance multi-hop reasoning capabilities
+    max_ir_steps: 2                         # Maximum number of iterative reasoning steps, 2-3 steps are recommended
+    ir_cot_top_k: 5                         # Number of documents used in each round of IR-CoT
+    
+    # Context Settings
+    retrieve_top_k: 5                        # Number of final retrieval results to return, optimized to 5
+    naive_max_token_for_text_unit: 12000     # Maximum number of tokens for a text unit in naive retrieval mode
+    local_max_token_for_text_unit: 4000      # Maximum number of tokens for a text unit in local retrieval mode
+    max_token_for_text_unit: 4000           # Maximum number of tokens for a text unit in standard retrieval mode
+    
+    # Result Limitation Settings
+    max_communities_in_context: 1           # Maximum number of communities in the context
+    max_entities_in_context: 5              # Maximum number of entities in the context
+    max_relationships_in_context: 5         # Maximum number of relationships in the context
+    max_chunks_in_context: 5                # Maximum number of document chunks in the context
+    
+    entities_max_tokens: 2000               # Maximum number of tokens for entity information during the query phase
+    relationships_max_tokens: 2000          # Maximum number of tokens for relationship information during the query phase
+    
+    # Document Display Control Settings
+    max_document_display_length: 8000       # Maximum length of a document allowed to be fully displayed (in characters)
+    max_smart_truncate_length: 8000         # Threshold length for enabling smart truncation (in characters)
+    truncate_head_chars: 4000                # Number of characters to keep at the beginning when truncating
+    truncate_tail_chars: 3000                # Number of characters to keep at the end when truncating

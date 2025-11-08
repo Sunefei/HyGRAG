@@ -7,7 +7,7 @@ use_entity_link_chunk: True               # 启用实体-块链接映射，支�
 enable_graph_augmentation: False          # 启用图增强，通过实体相似性添加额外连边(hipporag)
 
 # 数据配置 (Data Configuration)
-index_name: hk_graph_tree_cleora_lsh      # 索引名称，用于标识当前实验配置
+index_name: hk_graph_tree_cleora_lsh_th3      # 索引名称，用于标识当前实验配置
 
 vdb_type: faiss  # vector/colbert
 
@@ -68,7 +68,7 @@ graph:
     faiss_hnsw_m: 64                           # HNSW算法M参数，控制连接度(提高质量)
     faiss_hnsw_ef_construction: 500            # HNSW构建时的efConstruction参数
     faiss_hnsw_ef_search: 200                   # HNSW搜索时的efSearch参数
-    faiss_index_path: "./faiss_index_debug/quality"     # FAISS索引保存路径
+    faiss_index_path: "./faiss_index_th3/Popqa"     # FAISS索引保存路径
 
 # 检索器配置 (Retrieval Configuration)
 retriever:
