@@ -1,6 +1,5 @@
 from Core.Common.Constants import Retriever
 from Core.Retriever import *
-from Core.Retriever.HKPPRRetriever import HKPPRRetriever
 
 
 class MixRetriever:
@@ -16,8 +15,6 @@ class MixRetriever:
         self.retrievers[Retriever.RELATION] = RelationshipRetriever(**self.context.as_dict)
         self.retrievers[Retriever.SUBGRAPH] = SubgraphRetriever(**self.context.as_dict)
         # Add HK Graph PPR Retriever
-        self.retrievers["hk_ppr"] = HKPPRRetriever(**self.context.as_dict)
-
     async def retrieve_relevant_content(self, type: Retriever, mode: str, **kwargs):
         # Handle HK Graph PPR retrieval
         if type == "hk_ppr":

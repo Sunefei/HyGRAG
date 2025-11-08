@@ -7,7 +7,6 @@ from Core.Graph.PassageGraph import PassageGraph
 from Core.Graph.TreeGraph import TreeGraph
 from Core.Graph.TreeGraphBalanced import TreeGraphBalanced
 from Core.Graph.RKGraph import RKGraph
-from Core.Graph.HKGraph import HKGraph
 from Core.Graph.HKGraphTree import HKGraphTree
 from Core.Graph.HKGraphTreeDynamic import HKGraphTreeDynamic
 
@@ -20,7 +19,6 @@ class GraphFactory():
             "tree_graph": self._create_tree_graph,
             "tree_graph_balanced": self._create_tree_graph_balanced,
             "passage_graph": self._crease_passage_graph,
-            "hk_graph": self._create_hk_graph,
             "hk_graph_tree": self._create_hk_graph_tree,
             "hk_graph_tree_dynamic": self._create_hk_graph_tree_dynamic
         }

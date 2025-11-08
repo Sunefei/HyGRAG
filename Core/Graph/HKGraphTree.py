@@ -961,7 +961,7 @@ class HKGraphTree(BaseGraph):
             buckets[bucket_id].append(node_ids[i])
         
         # Print initial bucket statistics
-        self._print_bucket_stats(buckets, "Initial LSH Buckets")
+        # self._print_bucket_stats(buckets, "Initial LSH Buckets")
         
         # Process buckets to create final clusters
         clusters = []
