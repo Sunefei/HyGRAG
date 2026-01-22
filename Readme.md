@@ -1,4 +1,4 @@
-The code implementation of HyGRAG, submitted to WWW' 26.
+The code implementation of HyGRAG, accepted by WWW' 26.
 
 ## HyGRAG
 
