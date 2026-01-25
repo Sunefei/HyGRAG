@@ -1,11 +1,7 @@
-The code implementation of HyGRAG, accepted by WWW' 26.
-
 ## HyGRAG
 
----
-Fixed the incorrect reference to Appendix X on line 664. The latest PDF has been uploaded.
-
----
+The code implementation of HyGRAG, accepted by WWW' 26.
+"A Unified Framework for Context-Aware and Relation-Aware Graph Retrieval-Augmented Generation"
 
 ## Quick Start 🚀
 
@@ -49,3 +45,5 @@ python main_incremental.py -opt Option/Ours/HKGraphTreeDynamic.yaml -dataset_nam
 ```
 
 ---
+
+Cite me.
