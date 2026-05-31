@@ -53,7 +53,7 @@ graph:
     random_seed: 42                          # 随机种子，确保结果可复现
     
     # 通用设置
-    summary_max_tokens: 500                  # 实体/关系摘要的最大token数
+    summary_max_tokens: 1500                  # 实体/关系摘要的最大token数
     llm_model_max_token_size: 32768         # 图构建阶段LLM的最大token限制
     
     # Chunk-Chunk连接设置

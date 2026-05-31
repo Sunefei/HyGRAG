@@ -53,7 +53,7 @@ graph:
     random_seed: 42                          # Random seed to ensure reproducible results
     
     # General Settings
-    summary_max_tokens: 500                  # Maximum number of tokens for entity/relation summaries
+    summary_max_tokens: 1500                  # Maximum number of tokens for entity/relation summaries
     llm_model_max_token_size: 32768         # Maximum token limit for the LLM during the graph construction phase
     
     # Chunk-Chunk Connection Settings
