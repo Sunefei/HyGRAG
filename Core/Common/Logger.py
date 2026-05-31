@@ -20,7 +20,7 @@ def define_log_level(print_level="INFO", logfile_level="DEBUG", name: str = None
     
     if name:
         log_dir = os.path.join(name, "Logs")
-        os.makedirs(log_dir, exist_ok=True)  # 确保目录存在
+        os.makedirs(log_dir, exist_ok=True)  # Ensure directory exists
         log_name = os.path.join(log_dir, f"{formatted_date}.log")
     else:
         log_name = f"Logs/{formatted_date}.log"

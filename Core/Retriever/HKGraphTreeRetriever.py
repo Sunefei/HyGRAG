@@ -12,22 +12,22 @@ from Core.Common.Constants import Retriever
 
 class HKGraphTreeRetriever(BaseRetriever):
     """
-    HKGraphTree专用检索器：从顶向下检索层次化社区、实体、文档块和关系
-    
-    核心思路：
-    1. 从顶层社区开始，使用查询相似性筛选相关社区
-    2. 逐层向下展开，获取子社区和成员节点
-    3. 在底层收集相关的实体、文档块和关系
-    4. 整合多层次信息形成最终检索结果
+    HKGraphTree specialized retriever: top-down retrieval of hierarchical communities, entities, chunks, and relations.
+
+    Core approach:
+    1. Start from top-level communities, filter relevant ones using query similarity
+    2. Expand downward to retrieve sub-communities and member nodes
+    3. Collect relevant entities, chunks, and relations at the base level
+    4. Integrate multi-level information to form final retrieval results
     """
-    
+
     def __init__(self, **kwargs):
         config = kwargs.pop("config")
         super().__init__(config)
         self.mode_list = ["hk_tree_search", "hk_tree_top_down", "hk_tree_comprehensive", "hk_tree_true_search", "hk_tree_flat_search"]
         self.type = "hk_tree"
-        
-        # 设置必需的属性
+
+        # Set required attributes
         for key, value in kwargs.items():
             setattr(self, key, value)
         
@@ -41,21 +41,21 @@ class HKGraphTreeRetriever(BaseRetriever):
     async def _compute_community_similarity(self, query_embedding: np.ndarray, 
                                           community: Dict, summary: str) -> float:
         """
-        计算查询与社区的相似性分数
-        优先使用已保存的 node_text_embeddings，避免重复计算
-        
+        Compute similarity between query and community.
+        Prefer cached node_text_embeddings to avoid redundant computation.
+
         Args:
-            query_embedding: 查询embedding
-            community: 社区信息
-            summary: 社区摘要
-            
+            query_embedding: Query embedding vector
+            community: Community info dict
+            summary: Community summary text
+
         Returns:
-            相似性分数
+            Similarity score
         """
         try:
             community_id = community['id']
             
-            # 方法1：优先使用预计算的文本embedding（最常见且高效）
+            # Method 1: Use precomputed text embedding (most common and efficient)
             if (hasattr(self.graph, 'node_text_embeddings') and 
                 community_id in self.graph.node_text_embeddings):
                 community_embedding = self.graph.node_text_embeddings[community_id]
@@ -65,14 +65,14 @@ class HKGraphTreeRetriever(BaseRetriever):
             
             
             
-            # 方法3：基于社区摘要重新计算embedding（应该很少触发）
+            # Fallback: recalculate embedding from community summary (rarely triggered)
             if summary and summary.strip():
-                logger.debug(f"⚠️ No cached embedding for community {community_id}, recalculating from summary...")
+                logger.debug(f"No cached embedding for community {community_id}, recalculating from summary...")
                 summary_embedding = await self._get_query_embedding(summary)
                 similarity = np.dot(query_embedding, summary_embedding)
                 return float(similarity)
-            
-            # 方法4：如果没有摘要，返回低分
+
+            # Fallback: return low score if no summary available
             logger.warning(f"No embedding or summary for community {community_id}")
             return 0.1
             
@@ -83,31 +83,31 @@ class HKGraphTreeRetriever(BaseRetriever):
     async def _extract_entities_and_chunks_from_nodes(self, member_nodes: Set[str], 
                                                     query_embedding: np.ndarray) -> Tuple[List[Dict], List[Dict]]:
         """
-        从成员节点中提取并排序实体和文档块
-        
+        Extract and sort entities and chunks from member nodes.
+
         Args:
-            member_nodes: 成员节点集合
-            query_embedding: 查询embedding
-            
+            member_nodes: Set of member node IDs
+            query_embedding: Query embedding vector
+
         Returns:
-            (实体列表, 文档块列表)
+            (entity list, chunk list)
         """
         entities = []
         chunks = []
         
         for node_id in member_nodes:
             if node_id.startswith('CHUNK_'):
-                # 处理文档块节点
+                # Process chunk nodes
                 chunk_data = await self._get_chunk_data_with_similarity(node_id, query_embedding)
                 if chunk_data:
                     chunks.append(chunk_data)
             elif not node_id.startswith('COMMUNITY_'):
-                # 处理实体节点（跳过社区节点）
+                # Process entity nodes (skip community nodes)
                 entity_data = await self._get_entity_data_with_similarity(node_id, query_embedding)
                 if entity_data:
                     entities.append(entity_data)
-        
-        # 按相似性分数排序
+
+        # Sort by similarity score
         entities.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         chunks.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         
@@ -116,30 +116,30 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_chunk_data_with_similarity(self, chunk_node_id: str, query_embedding: np.ndarray) -> Dict[str, Any]:
         """
-        获取文档块数据并计算相似性分数
-        优先使用已保存的 node_text_embeddings，避免重复计算
+        Get chunk data and compute similarity score.
+        Prefer cached node_text_embeddings to avoid redundant computation.
         """
         try:
             chunk_key = chunk_node_id.replace('CHUNK_', '')
             chunk_content = None
-            
+
             if hasattr(self, 'doc_chunk') and self.doc_chunk is not None:
-                # 检查get_data_by_key是否是async方法
+                # Check if get_data_by_key is async
                 try:
                     if hasattr(self.doc_chunk, 'get_data_by_key'):
-                        # 尝试async调用
+                        # Try async call
                         if asyncio.iscoroutinefunction(self.doc_chunk.get_data_by_key):
                             chunk_content = await self.doc_chunk.get_data_by_key(chunk_key)
                         else:
-                            # 同步调用
+                            # Sync call
                             chunk_content = self.doc_chunk.get_data_by_key(chunk_key)
                     else:
                         logger.warning(f"doc_chunk does not have get_data_by_key method")
                         return None
                     
                     if chunk_content:
-                        # 优先使用已保存的文本嵌入
-                        if (hasattr(self.graph, 'node_text_embeddings') and 
+                        # Prefer cached text embeddings
+                        if (hasattr(self.graph, 'node_text_embeddings') and
                             chunk_node_id in self.graph.node_text_embeddings):
                             chunk_embedding = self.graph.node_text_embeddings[chunk_node_id]
                             if isinstance(chunk_embedding, np.ndarray):
@@ -147,7 +147,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                             else:
                                 similarity_score = 0.0
                         else:
-                            # 回退：重新计算 embedding
+                            # Fallback: recalculate embedding
                             content_embedding = await self._get_query_embedding(chunk_content)
                             similarity_score = np.dot(query_embedding, content_embedding)
                         
@@ -166,14 +166,14 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_entity_data_with_similarity(self, entity_node_id: str, query_embedding: np.ndarray) -> Dict[str, Any]:
         """
-        获取实体数据并计算相似性分数
-        优先使用已保存的 node_text_embeddings，避免重复计算
+        Get entity data and compute similarity score.
+        Prefer cached node_text_embeddings to avoid redundant computation.
         """
         try:
             entity_data = await self.graph.get_node(entity_node_id)
             if entity_data:
-                # 优先使用已保存的文本嵌入
-                if (hasattr(self.graph, 'node_text_embeddings') and 
+                # Prefer cached text embeddings
+                if (hasattr(self.graph, 'node_text_embeddings') and
                     entity_node_id in self.graph.node_text_embeddings):
                     entity_embedding = self.graph.node_text_embeddings[entity_node_id]
                     if isinstance(entity_embedding, np.ndarray):
@@ -181,7 +181,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                     else:
                         similarity_score = 0.0
                 else:
-                    # 回退：重新计算 embedding（基于名称和描述）
+                    # Fallback: recalculate embedding (based on name and description)
                     entity_text = f"{entity_data.get('entity_name', '')} {entity_data.get('description', '')}"
                     if entity_text.strip():
                         entity_embedding = await self._get_query_embedding(entity_text)
@@ -202,50 +202,50 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_query_embedding(self, query: str) -> np.ndarray:
         """
-        获取查询的嵌入向量
+        Get query embedding vector
         """
         try:
             embedding = None
-            
-            # 尝试使用HKGraphTree的embedding方法
+
+            # Try using HKGraphTree's embedding method
             if hasattr(self.graph, '_embed_text'):
                 try:
                     embedding = await self.graph._embed_text(query)
                     #logger.debug(f"Used graph._embed_text for query embedding")
                 except Exception as e:
                     logger.warning(f"Failed to use graph._embed_text: {e}")
-            
-            # 回退到直接使用embedding_model
+
+            # Fallback: use embedding_model directly
             if embedding is None and hasattr(self.graph, 'embedding_model'):
                 try:
                     embedding = self.graph.embedding_model._get_text_embedding(query)
                     logger.debug(f"Used graph.embedding_model for query embedding")
                 except Exception as e:
                     logger.warning(f"Failed to use graph.embedding_model: {e}")
-            
-            # 尝试使用entities_vdb的embedding模型
+
+            # Try using entities_vdb embedding model
             if embedding is None and hasattr(self, 'entities_vdb') and hasattr(self.entities_vdb, 'embedding_model'):
                 try:
                     embedding = self.entities_vdb.embedding_model._get_text_embedding(query)
                     logger.debug(f"Used entities_vdb.embedding_model for query embedding")
                 except Exception as e:
                     logger.warning(f"Failed to use entities_vdb.embedding_model: {e}")
-            
-            # 最后的回退：随机嵌入
+
+            # Last resort: random embedding
             if embedding is None:
                 logger.warning("No embedding model found, using random embeddings")
                 embedding = np.random.normal(0, 0.1, 128)
-            
-            # 确保embedding是numpy数组
+
+            # Ensure embedding is a numpy array
             if not isinstance(embedding, np.ndarray):
                 embedding = np.array(embedding)
-            
-            # 归一化
+
+            # Normalize
             norm = np.linalg.norm(embedding)
             if norm > 0:
                 embedding = embedding / norm
             else:
-                # 如果norm为0，使用随机向量
+                # If norm is 0, use random vector
                 embedding = np.random.normal(0, 0.1, len(embedding))
                 embedding = embedding / np.linalg.norm(embedding)
             
@@ -259,7 +259,7 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_chunk_data(self, chunk_node_id: str) -> Dict[str, Any]:
         """
-        获取文档块数据
+        Get chunk data
         """
         try:
             chunk_key = chunk_node_id.replace('CHUNK_', '')
@@ -277,7 +277,7 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_entity_data(self, entity_node_id: str) -> Dict[str, Any]:
         """
-        获取实体数据
+        Get entity data
         """
         try:
             entity_data = await self.graph.get_node(entity_node_id)
@@ -294,41 +294,41 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_relationships_between_nodes(self, node_ids: Set[str]) -> List[Dict[str, Any]]:
         """
-        获取节点间的关系 - 只考虑entity和entity之间的关系，跳过涉及chunk的关系
+        Get inter-node relationships - only entity-entity (skip chunk-related).
         """
         relationships = []
         node_ids_list = list(node_ids)
-        
+
         try:
             logger.debug(f"Getting entity-entity relationships for {len(node_ids_list)} nodes")
-            
+
             for i, src_node in enumerate(node_ids_list):
                 try:
-                    # 跳过chunk节点和community节点，只处理entity节点
+                    # Skip chunk and community nodes, only process entity nodes
                     if src_node.startswith('CHUNK_') or src_node.startswith('COMMUNITY_'):
                         continue
-                    
-                    # 检查graph是否有get_node_edges方法
+
+                    # Check if graph has get_node_edges method
                     if not hasattr(self.graph, 'get_node_edges'):
                         logger.warning("Graph does not have get_node_edges method")
                         break
-                    
-                    # 获取该节点的所有边
+
+                    # Get all edges for this node
                     node_edges = await self.graph.get_node_edges(src_node)
                     if node_edges:
                         for edge_tuple in node_edges:
                             try:
                                 if len(edge_tuple) >= 2:
                                     tgt_node = edge_tuple[1] if edge_tuple[0] == src_node else edge_tuple[0]
-                                    
-                                    # 只有当目标节点也是entity（不是chunk或community）且在节点集合中时才处理 #TODO 
-                                    # if (tgt_node in node_ids and 
-                                    #     not tgt_node.startswith('CHUNK_') and 
+
+                                    # Only process when target is also entity (not chunk or community) # TODO
+                                    # if (tgt_node in node_ids and
+                                    #     not tgt_node.startswith('CHUNK_') and
                                     #     not tgt_node.startswith('COMMUNITY_')):
-                                    if (  not tgt_node.startswith('CHUNK_') and # 只有当目标节点也是entity（不是chunk或community）
+                                    if (  not tgt_node.startswith('CHUNK_') and # Only when target is also entity (not chunk or community)
                                         not tgt_node.startswith('COMMUNITY_')):
-                                        
-                                        # 获取边数据
+
+                                        # Get edge data
                                         edge_data = await self.graph.get_edge(src_node, tgt_node)
                                         if edge_data:
                                             relationships.append({
@@ -353,16 +353,16 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _compute_text_similarity(self, query_embedding: np.ndarray, text: str) -> float:
         """
-        计算查询嵌入与文本的相似性
+        Compute similarity between query embedding and text
         """
         try:
             if not text.strip():
                 return 0.0
-            
-            # 获取文本嵌入
+
+            # Get text embedding
             text_embedding = await self._get_query_embedding(text)
-            
-            # 计算余弦相似性
+
+            # Compute cosine similarity
             similarity = np.dot(query_embedding, text_embedding)
             return float(similarity)
         except Exception as e:
@@ -371,9 +371,9 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _fallback_retrieval(self, query: str, seed_entities: List[Dict]) -> Dict[str, Any]:
         """
-        当层次化检索不可用时的回退方法
+        Fallback method when hierarchical retrieval is unavailable
         """
-        logger.info("🔄 Using fallback retrieval method...")
+        logger.info("Using fallback retrieval method...")
         
         results = {
             'entities': [],
@@ -384,7 +384,7 @@ class HKGraphTreeRetriever(BaseRetriever):
         }
         
         try:
-            # 尝试基础的实体检索
+            # Try basic entity retrieval
             if hasattr(self, 'entities_vdb') and seed_entities:
                 entity_results = []
                 for seed_entity in seed_entities[:self.config.top_k]:
@@ -395,10 +395,10 @@ class HKGraphTreeRetriever(BaseRetriever):
                         'type': 'entity'
                     })
                 results['entities'] = entity_results
-            
-            # 尝试基础的文档块检索
+
+            # Try basic chunk retrieval
             if hasattr(self, 'doc_chunk'):
-                # 获取一些示例文档块
+                # Get some sample chunks
                 try:
                     sample_chunks = []
                     for i in range(min(self.config.top_k, 5)):
@@ -420,22 +420,22 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _seed_entity_based_retrieval(self, query: str, seed_entities: List[Dict]) -> Dict[str, Any]:
         """
-        基于种子实体的检索
+        Seed entity based retrieval
         """
-        # 这里可以实现基于种子实体的传统检索逻辑
-        # 作为层次化检索的补充
+        # Traditional retrieval logic based on seed entities
+        # As a supplement to hierarchical retrieval
         return await self._fallback_retrieval(query, seed_entities)
 
     ### 
     @register_retriever_method(type="hk_tree", method_name="hk_tree_flat_search")
     async def _hk_tree_flat_search_retrieval(self, query: str, seed_entities: List[Dict] = None, **kwargs) -> Dict[str, Any]:
         """
-        扁平化检索：直接在所有层次的所有节点中寻找top_k个最相关的节点
-        不考虑层次结构，将所有节点（基础节点+社区节点）扁平化处理
+        Flat search: find top_k most relevant nodes across all hierarchy levels.
+        Treats all nodes (base + community) as a flat collection regardless of hierarchy.
         """
-        #logger.info("🔍 Starting flat search across all hierarchy levels...")
-        
-        # 检查是否支持层次结构
+        #logger.info("Starting flat search across all hierarchy levels...")
+
+        # Check if hierarchy is supported
         if not hasattr(self.graph, 'get_hierarchy_info'):
             logger.warning("Graph does not support hierarchy structure, falling back")
             return await self._fallback_retrieval(query, seed_entities)
@@ -446,10 +446,10 @@ class HKGraphTreeRetriever(BaseRetriever):
             return await self._fallback_retrieval(query, seed_entities)
         
         try:
-            # Step 1: 获取查询嵌入
+            # Step 1: Get query embedding
             query_embedding = await self._get_query_embedding(query)
-            
-            # Step 2: 使用FAISS检索最相似的节点
+
+            # Step 2: Use FAISS to retrieve most similar nodes
             top_k = getattr(self.config, 'top_k', 5)
             extended_top_k = min(top_k * 200, 1000)  
             
@@ -467,7 +467,7 @@ class HKGraphTreeRetriever(BaseRetriever):
             
             #logger.info(f"📊 From {len(all_nodes_with_scores)} total nodes, selected top {len(top_nodes)} for processing")
             
-            # Step 4: 分类并构建最终结果
+            # Step 4: Classify and build final results
             results = await self._build_flat_search_results(top_nodes, query_embedding, top_k)
             
             # logger.info(f"🎯 Flat search completed: {len(results.get('communities', []))} communities, "
@@ -481,11 +481,11 @@ class HKGraphTreeRetriever(BaseRetriever):
     
     async def _collect_all_nodes_with_similarity(self, query_embedding: np.ndarray, hierarchy_info: Dict) -> List[Dict]:
         """
-        收集所有层次的所有节点并计算相似性分数
+        Collect all nodes across all levels and compute similarity scores
         """
         all_nodes_with_scores = []
-        
-        # 1. 收集所有基础节点（entities和chunks）
+
+        # 1. Collect all base nodes (entities and chunks)
         base_nodes = []
         if hasattr(self.graph, 'node_embeddings'):
             for node_id in self.graph.node_embeddings.keys():
@@ -494,7 +494,7 @@ class HKGraphTreeRetriever(BaseRetriever):
         
         #logger.info(f"📋 Found {len(base_nodes)} base nodes (entities + chunks)")
         
-        # 计算基础节点的相似性
+        # Compute similarity for base nodes
         for node_id in base_nodes:
             try:
                 similarity_score = await self._compute_node_similarity(query_embedding, node_id)
@@ -502,7 +502,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                 node_info = {
                     'id': node_id,
                     'type': 'chunk' if node_id.startswith('CHUNK_') else 'entity',
-                    'level': 0,  # 基础层
+                    'level': 0,  # Base layer
                     'similarity_score': similarity_score
                 }
                 all_nodes_with_scores.append(node_info)
@@ -511,7 +511,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                 logger.warning(f"Failed to compute similarity for base node {node_id}: {e}")
                 continue
         
-        # 2. 收集所有社区节点
+        # 2. Collect all community nodes
         hierarchy_levels = hierarchy_info.get('hierarchy_levels', {})
         community_summaries = hierarchy_info.get('community_summaries', {})
         
@@ -520,7 +520,7 @@ class HKGraphTreeRetriever(BaseRetriever):
             for community in communities:
                 community_id = community['id']
                 try:
-                    # 计算社区相似性
+                    # Compute community similarity
                     similarity_score = await self._compute_community_similarity(
                         query_embedding, community, community_summaries.get(community_id, '')
                     )
@@ -547,11 +547,11 @@ class HKGraphTreeRetriever(BaseRetriever):
     
     async def _compute_node_similarity(self, query_embedding: np.ndarray, node_id: str) -> float:
         """
-        计算基础节点（entity或chunk）与查询的相似性
-        优先使用已保存的 node_text_embeddings，避免重复计算
+        Compute similarity between base node (entity or chunk) and query
+        Prefer saved node_text_embeddings to avoid recomputation
         """
         try:
-            # 优先使用已保存的文本嵌入（这是最常见和高效的方式）
+            # Prefer saved text embeddings (most common and efficient)
             if (hasattr(self.graph, 'node_text_embeddings') and 
                 node_id in self.graph.node_text_embeddings):
                 node_embedding = self.graph.node_text_embeddings[node_id]
@@ -559,11 +559,11 @@ class HKGraphTreeRetriever(BaseRetriever):
                     similarity = await self.compute_similarity(query_embedding, node_embedding, "cosine")
                     return float(similarity)
             
-            # 回退方案：基于文本内容重新计算（应该很少触发）
+            # Fallback: recompute from text content (rarely triggered)
             logger.debug(f"⚠️ No cached embedding for {node_id}, recalculating...")
             
             if node_id.startswith('CHUNK_'):
-                # Chunk节点：使用chunk内容
+                # Chunk node: use chunk content
                 chunk_key = node_id.replace('CHUNK_', '')
                 chunk_content = await self._get_chunk_content_for_similarity(chunk_key)
                 if chunk_content:
@@ -571,7 +571,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                     similarity = np.dot(query_embedding, content_embedding)
                     return float(similarity)
             else:
-                # Entity节点：使用实体名称和描述
+                # Entity node: use entity name and description
                 entity_data = await self.graph.get_node(node_id)
                 if entity_data:
                     entity_text = f"{entity_data.get('entity_name', '')} {entity_data.get('description', '')}"
@@ -590,28 +590,28 @@ class HKGraphTreeRetriever(BaseRetriever):
                        node_embedding: np.ndarray, 
                        method: str = "cosine") -> float:
         """
-        计算 query 和 node 的相似度
+        Compute similarity between query and node
         
-        参数:
-            query_embedding: np.ndarray, 查询向量
-            node_embedding: np.ndarray, 节点向量
-            method: str, "cosine" 或 "l2"
+        Args:
+            query_embedding: np.ndarray, query vector
+            node_embedding: np.ndarray, node vector
+            method: str, "cosine" or "l2"
         
-        返回:
-            similarity: float, 相似度分数
+        Returns:
+            similarity: float, similarity score
         """
         if not isinstance(query_embedding, np.ndarray) or not isinstance(node_embedding, np.ndarray):
             raise ValueError("Both embeddings must be numpy arrays.")
 
         if method == "cosine":
-            # 归一化后点积 = 余弦相似度
+            # Normalized dot product = cosine similarity
             q_norm = query_embedding / np.linalg.norm(query_embedding)
             n_norm = node_embedding / np.linalg.norm(node_embedding)
             similarity = np.dot(q_norm, n_norm)
             return float(similarity)
 
         elif method == "l2":
-            # L2 距离 -> 相似度 (值越大越相似)
+            # L2 distance -> similarity (higher = more similar)
             distance = np.linalg.norm(query_embedding - node_embedding)
             similarity = 1 / (1 + distance)
             return float(similarity)
@@ -621,7 +621,7 @@ class HKGraphTreeRetriever(BaseRetriever):
     
     async def _get_chunk_content_for_similarity(self, chunk_key: str) -> str:
         """
-        获取chunk内容用于相似性计算
+        Get chunk content for similarity computation
         """
         try:
             if hasattr(self, 'doc_chunk') and self.doc_chunk is not None:
@@ -636,7 +636,7 @@ class HKGraphTreeRetriever(BaseRetriever):
     
     async def _build_flat_search_results(self, top_nodes: List[Dict], query_embedding: np.ndarray, top_k: int) -> Dict[str, Any]:
         """
-        从扁平化搜索的top节点构建最终结果
+        Build final results from flattened search top nodes
         """
         results = {
             'communities': [],
@@ -646,26 +646,26 @@ class HKGraphTreeRetriever(BaseRetriever):
             'community_summaries': []
         }
         
-        # 分类处理top节点
+        # Classify top nodes
         selected_communities = []
-        selected_entities = []  # 来自top_nodes的实体，受temp_entity_limit限制
+        selected_entities = []  # Entities from top_nodes, limited by temp_entity_limit
         selected_chunks = []
         
-        # 按类型和相似性分配节点 #TODO
+        # Assign nodes by type and similarity #TODO
         # community + chunk = top_k, entity = top_k, relationships = top_k
-        max_community_limit = max(1, top_k // 5)  # 最大社区数量为1、1/5 
+        max_community_limit = max(1, top_k // 5)  # Max community count 
         community_limit = max_community_limit #TODO debug
-        chunk_limit = top_k - max_community_limit  # 剩余全部给chunks
-        entity_limit = top_k  # 实体数量为top_k
-        temp_entity_limit = entity_limit * 3 #TODO relation的entity
-        relationship_limit = top_k  # 关系数量为top_k
+        chunk_limit = top_k - max_community_limit  # Remaining for chunks
+        entity_limit = top_k  # Entity count = top_k
+        temp_entity_limit = entity_limit * 3  # TODO: entities for relation lookup
+        relationship_limit = top_k  # Relationship count = top_k
         
         for node in top_nodes:
             node_type = node['type']
             node_id = node['id']
             # Old method 1 community and 4 chunks
             # if node_type == 'community' and len(selected_communities) < community_limit:
-            #     # 添加社区信息
+            #     # Add community info
             #     community_info = {
             #         'id': node_id,
             #         'level': node['level'],
@@ -676,7 +676,7 @@ class HKGraphTreeRetriever(BaseRetriever):
             #     selected_communities.append(community_info)
             #     results['community_summaries'].append(community_info['summary'])
                 
-            #     # 收集社区成员节点
+            #     # Collect community member nodes
             #     if hasattr(self.graph, 'get_community_children'):
             #         try:
             #             children = await self.graph.get_community_children(node_id)
@@ -684,15 +684,15 @@ class HKGraphTreeRetriever(BaseRetriever):
             #         except Exception as e:
             #             logger.warning(f"Failed to get children for community {node_id}: {e}")
                         
-            # elif node_type == 'entity' and len(selected_entities) < temp_entity_limit: #原本为entity_limit
-            #     # 添加实体信息
+            # elif node_type == 'entity' and len(selected_entities) < temp_entity_limit:
+            #     # Add entity info
             #     entity_data = await self._get_entity_data_with_similarity(node_id, query_embedding)
             #     if entity_data:
             #         selected_entities.append(entity_data)
             #         all_member_nodes.add(node_id)
                     
             # elif node_type == 'chunk' and len(selected_chunks) < chunk_limit:
-            #     # 添加chunk信息
+            #     # Add chunk info
             #     chunk_data = await self._get_chunk_data_with_similarity(node_id, query_embedding)
             #     if chunk_data:
             #         selected_chunks.append(chunk_data)
@@ -700,14 +700,14 @@ class HKGraphTreeRetriever(BaseRetriever):
 
             # New method Free Community and chunks
                         
-            if node_type == 'entity' and len(selected_entities) < temp_entity_limit: #原本为entity_limit
-                # 添加实体信息
+            if node_type == 'entity' and len(selected_entities) < temp_entity_limit:
+                # Add entity info
                 entity_data = await self._get_entity_data_with_similarity(node_id, query_embedding)
                 if entity_data:
                     selected_entities.append(entity_data)
 
             elif (node_type == 'community' or node_type == 'chunk') and len(selected_communities) + len(selected_chunks)< top_k:
-                # 添加社区信息
+                # Add community info
                 if node_type == 'community' and len(selected_communities) < max_community_limit:
                     community_info = {
                         'id': node_id,
@@ -720,12 +720,12 @@ class HKGraphTreeRetriever(BaseRetriever):
                     results['community_summaries'].append(community_info['summary'])
                     
                 elif node_type == 'chunk' and len(selected_chunks) < top_k:
-                    # 添加chunk信息
+                    # Add chunk info
                     chunk_data = await self._get_chunk_data_with_similarity(node_id, query_embedding)
                     if chunk_data:
                         selected_chunks.append(chunk_data)
             
-        # 继续收集entity直到达到entity_limit
+        # Continue collecting entities until entity_limit is reached
         for node in top_nodes:
             if len(selected_entities) >= temp_entity_limit:
                 break
@@ -734,7 +734,7 @@ class HKGraphTreeRetriever(BaseRetriever):
             node_id = node['id']
             
             if node_type == 'entity':
-                # 检查是否已经添加过这个entity
+                # Check if this entity was already added
                 already_added = any(e.get('entity_name') == node_id for e in selected_entities)
                 
                 if not already_added:
@@ -742,7 +742,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                     if entity_data:
                         selected_entities.append(entity_data)
         
-        # 如果community + chunk总数不够top_k，优先补充chunk
+        # If community + chunk total < top_k, supplement with chunks
         community_chunk_total = len(selected_communities) + len(selected_chunks)
         if community_chunk_total < top_k:
             remaining_slots = top_k - community_chunk_total
@@ -754,7 +754,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                 node_id = node['id']
                 
                 if node_type == 'chunk':
-                    # 检查是否已经添加过这个chunk
+                    # Check if this chunk was already added
                     already_added = any(c.get('id') == node_id.replace('CHUNK_', '') for c in selected_chunks)
                     
                     if not already_added:
@@ -763,7 +763,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                             selected_chunks.append(chunk_data)
                             remaining_slots -= 1
         
-        # 从选中的社区中提取实体（不受temp_entity_limit限制）
+        # Extract entities from selected communities (not limited by temp_entity_limit)
         community_entities = []
         if selected_communities:
             logger.debug(f"🏘️ Extracting entities from {len(selected_communities)} selected communities")
@@ -771,22 +771,22 @@ class HKGraphTreeRetriever(BaseRetriever):
             for community_info in selected_communities:
                 community_id = community_info['id']
                 try:
-                    # 获取社区的子节点
+                    # Get community child nodes
                     if hasattr(self.graph, 'get_community_children'):
                         children = await self.graph.get_community_children(community_id)
                         
                         for child_node_id in children:
-                            # 只处理实体节点（跳过chunk和community节点）
+                            # Only process entity nodes (skip chunks and communities)
                             if (not child_node_id.startswith('CHUNK_') and 
                                 not child_node_id.startswith('COMMUNITY_')):
                                 
-                                # 检查是否已经在selected_entities中
+                                # Check if already in selected_entities
                                 already_selected = any(e.get('entity_name') == child_node_id for e in selected_entities)
                                 
                                 if not already_selected:
                                     entity_data = await self._get_entity_data_with_similarity(child_node_id, query_embedding)
                                     if entity_data:
-                                        # 标记这是来自社区的实体
+                                        # Mark as entity from community
                                         entity_data['source'] = 'community_member'
                                         community_entities.append(entity_data)
                                         
@@ -795,41 +795,41 @@ class HKGraphTreeRetriever(BaseRetriever):
             
             logger.debug(f"✅ Extracted {len(community_entities)} entities from communities")
         
-        # 合并两种来源的实体用于关系查找（去重）
-        all_entities_for_relations = selected_entities.copy()  # 来自top_nodes的实体
+        # Merge entities from both sources for relation lookup (dedup)
+        all_entities_for_relations = selected_entities.copy()  # Entities from top_nodes
         #community_entities = [] #TODO ablation
-        # 添加来自社区的实体，去重
+        # Add entities from communities, deduplicate
         for community_entity in community_entities:
             entity_name = community_entity.get('entity_name', '')
             already_exists = any(e.get('entity_name') == entity_name for e in all_entities_for_relations)
             if not already_exists:
                 all_entities_for_relations.append(community_entity)
         
-        # 按相似性排序结果
+        # Sort results by similarity
         selected_entities.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         community_entities.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         all_entities_for_relations.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         selected_chunks.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         selected_communities.sort(key=lambda x: x.get('similarity_score', 0), reverse=True)
         
-        # 填充结果 - 按照用户要求的数量分配
+        # Fill results - allocate as per user requirements
         # community + chunk = top_k, entity = top_k, relationships = top_k
         results['communities'] = selected_communities
-        results['entities'] = selected_entities[:entity_limit]  # 只输出来自top_nodes的实体，限制为entity_limit
+        results['entities'] = selected_entities[:entity_limit]  # Only output entities from top_nodes, limited
         results['chunks'] = selected_chunks
 
-        # 用于关系计算的实体（包含两种来源的实体）
+        # Entities for relation computation (from both sources)
         all_entities_for_relations = all_entities_for_relations[:entity_limit*5] #TODO debug
         selected_entity_names = [d['entity_name'] for d in all_entities_for_relations]
-        relationships = await self._get_relationships_between_nodes(selected_entity_names) #从合并后的实体中获取关系
+        relationships = await self._get_relationships_between_nodes(selected_entity_names)  # Get relations from merged entities
         selected_relationships = await self._get_select_relationships_from_relationships(relationships, query_embedding, top_k)
         results['relationships'] = selected_relationships[:relationship_limit]
 
         
-        # 确保 community + chunk 的总数不超过 top_k
+        # Ensure community + chunk total does not exceed top_k
         total_community_chunk = len(results['communities']) + len(results['chunks'])
         if total_community_chunk > top_k:
-            # 如果超过了，优先保留community，然后调整chunk数量
+            # If exceeded, prioritize communities, then adjust chunk count
             max_chunks = top_k - len(results['communities'])
             results['chunks'] = results['chunks'][:max_chunks]
         
@@ -845,72 +845,72 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _get_select_relationships_from_relationships(self, relationships: List[Dict], query_embedding: np.ndarray, top_k: int) -> List[Dict]:
         """
-        从关系中选择top_k个最相关的关系
+        Select top_k most relevant relationships
         
         Args:
-            relationships: 候选关系列表
-            query_embedding: 查询的embedding向量
-            top_k: 选择的关系数量
+            relationships: candidate relationship list
+            query_embedding: query embedding vector
+            top_k: number of relationships to select
             
         Returns:
-            按相似性排序的top_k个关系列表
+            List of top_k relationships sorted by similarity
         """
         if not relationships:
             return []
         
-        # 计算每个关系与查询的相似性分数
+        # Compute similarity score for each relationship with the query
         relationship_scores = []
         
         for relationship in relationships:
             try:
-                # 构建关系的文本表示：组合src_id, relation_name, tgt_id和description
+                # Build text representation: combine src_id, relation_name, tgt_id, and description
                 relation_text_parts = []
                 
-                # 添加源实体和目标实体
+                # Add source and target entities
                 src_id = relationship.get('src_id', '')
                 tgt_id = relationship.get('tgt_id', '')
                 relation_name = relationship.get('relation_name', '')
                 description = relationship.get('description', '')
                 
-                # 构建关系文本
+                # Build relation text
                 if src_id and relation_name and tgt_id:
                     relation_text_parts.append(f"{src_id} {relation_name} {tgt_id}")
                 
-                # 添加描述信息
+                # Add description
                 if description and description.strip():
                     relation_text_parts.append(description.strip())
                 
-                # 如果没有有效的文本信息，使用默认值
+                # Use defaults if no valid text
                 if not relation_text_parts:
                     relation_text_parts.append(f"{src_id} connected to {tgt_id}")
                 
-                # 组合所有文本
+                # Combine all text
                 relation_text = ". ".join(relation_text_parts)
                 
-                # 计算关系文本的embedding
+                # Compute embedding for relation text
                 relation_embedding = await self._get_query_embedding(relation_text)
                 
-                # 计算与查询的余弦相似性
-                similarity_score = np.dot(query_embedding, relation_embedding) #TODO 关系相似度选择
+                # Compute cosine similarity with query
+                similarity_score = np.dot(query_embedding, relation_embedding)  # TODO: relation similarity selection
                 
-                # 创建带分数的关系副本
+                # Create scored relationship copy
                 scored_relationship = relationship.copy()
                 scored_relationship['similarity_score'] = float(similarity_score)
-                scored_relationship['relation_text'] = relation_text  # 保存用于调试
+                scored_relationship['relation_text'] = relation_text  # Saved for debugging
                 
                 relationship_scores.append(scored_relationship)
                 
             except Exception as e:
                 logger.warning(f"Failed to compute similarity for relationship {relationship}: {e}")
-                # 如果计算失败，赋予低分数但仍保留
+                # If computation fails, assign low score but retain
                 fallback_relationship = relationship.copy()
                 fallback_relationship['similarity_score'] = 0.0
                 relationship_scores.append(fallback_relationship)
         
-        # 按相似性分数降序排序
+        # Sort by similarity score descending
         relationship_scores.sort(key=lambda x: x['similarity_score'], reverse=True)
         
-        # 去重：用 (src_id, relation_name, tgt_id) 作为唯一键
+        # Deduplicate: use (src_id, relation_name, tgt_id) as unique key
         seen = set()
         unique_relationships = []
         for rel in relationship_scores:
@@ -919,13 +919,13 @@ class HKGraphTreeRetriever(BaseRetriever):
                 seen.add(key)
                 unique_relationships.append(rel)
 
-        # 选择top_k个关系
+        # Select top_k relationships
         selected_relationships = unique_relationships[:top_k]
         
         logger.debug(f"🔗 Selected {len(selected_relationships)} relationships from {len(relationships)} candidates")
         
-        # 可选：记录top关系的信息（用于调试）
-        # for i, rel in enumerate(selected_relationships[:3]):  # 只记录前3个
+        # Optional: log top relations info (for debugging)
+        # for i, rel in enumerate(selected_relationships[:3]):  # Only log first 3
         #     logger.debug(f"   Top {i+1}: {rel.get('src_id', '')} -> {rel.get('tgt_id', '')} "
         #                  f"(relation: {rel.get('relation_name', '')}, score: {rel.get('similarity_score', 0):.3f})")
         
@@ -933,17 +933,17 @@ class HKGraphTreeRetriever(BaseRetriever):
 
     async def _faiss_search_top_nodes(self, query_embedding: np.ndarray, top_k: int) -> List[Dict]:
         """
-        使用FAISS检索最相似的节点，每种类型都检索top_k个
+        Use FAISS to retrieve most similar nodes, top_k per type
         
         Args:
-            query_embedding: 查询的embedding向量
-            top_k: 每种类型返回的节点数量
+            query_embedding: query embedding vector
+            top_k: number of nodes to return per type
             
         Returns:
-            按相似性排序的节点列表
+            List of nodes sorted by similarity
         """
         try:
-            # 检查graph是否有专用的FAISS搜索功能
+            # Check if graph has dedicated FAISS search
             if not hasattr(self.graph, 'search_similar_entities'):
                 logger.warning("Graph does not support specialized FAISS search methods")
                 return []
@@ -952,14 +952,14 @@ class HKGraphTreeRetriever(BaseRetriever):
             
             all_faiss_results = []
             
-            # 分别从三种专用索引中搜索，每种类型都搜索top_k个
+            # Search from three dedicated indexes, top_k per type
             node_types = ['chunk', 'entity', 'community']
             
             for node_type in node_types:
                 logger.debug(f"🔍 Searching {node_type} index for top {top_k} nodes")
                 
                 try:
-                    # 使用专用的搜索方法
+                    # Use dedicated search methods
                     if node_type == 'chunk':
                         current_results = await self.graph.search_similar_chunks(
                             query_embedding=query_embedding,
@@ -992,7 +992,7 @@ class HKGraphTreeRetriever(BaseRetriever):
                 logger.warning("FAISS search returned no results from any index")
                 return []
             
-            # 按相似度分数排序
+            # Sort by similarity score
             all_faiss_results.sort(key=lambda x: x[1], reverse=True)
             faiss_results = all_faiss_results
 
@@ -1000,17 +1000,17 @@ class HKGraphTreeRetriever(BaseRetriever):
                 logger.warning("FAISS search returned no results")
                 return []
             
-            # 获取节点详细信息
+            # Get detailed node info
             node_ids = [node_id for node_id, score in faiss_results]
             node_info_dict = await self.graph.get_node_info_by_ids(node_ids)
             
-            # 转换为与原格式兼容的结构
+            # Convert to compatible structure
             top_nodes = []
             for node_id, similarity_score in faiss_results:
                 node_info = node_info_dict.get(node_id, {})
                 node_type = node_info.get('node_type', 'unknown')
                 
-                # 转换节点类型名称以保持兼容性
+                # Convert node type name for compatibility
                 if node_type == 'chunk':
                     formatted_type = 'chunk'
                 elif node_type == 'entity':
@@ -1018,16 +1018,16 @@ class HKGraphTreeRetriever(BaseRetriever):
                 elif node_type == 'community':
                     formatted_type = 'community'
                 else:
-                    formatted_type = 'entity'  # 默认为entity
+                    formatted_type = 'entity'
                 
-                # 构建节点信息
+                # Build node info
                 node_data = {
                     'id': node_id,
                     'type': formatted_type,
                     'similarity_score': float(similarity_score)
                 }
                 
-                # 添加额外信息
+                # Add extra info
                 if formatted_type == 'community':
                     node_data['level'] = node_info.get('level', 0)
                     node_data['member_count'] = len(node_info.get('children', []))

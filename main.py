@@ -1,29 +1,23 @@
 import os
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'  # New: Set HF mirror site
 import warnings
-warnings.filterwarnings("ignore") # Ignore warnings
-import nltk
-nltk.data.path.append('/data/zhy/nltk_data') # Local cache for nltk database
+warnings.filterwarnings("ignore")
 
+import nltk
 from Core.GraphRAG import GraphRAG
 from Option.Config2 import Config
 import argparse
-import os
 import asyncio
 from pathlib import Path
 from shutil import copyfile
 from Data.QueryDataset import RAGQueryDataset
 import pandas as pd
+from Core.Common.Logger import logger
 from Core.Utils.Evaluation import Evaluator
 
 
-
 def check_dirs(opt):
-    # For each query, save the results in a separate directory
     result_dir = os.path.join(opt.working_dir, opt.exp_name, "Results")
-    # Save the current used config in a separate directory
     config_dir = os.path.join(opt.working_dir, opt.exp_name, "Configs")
-    # Save the metrics of entire experiment in a separate directory
     metric_dir = os.path.join(opt.working_dir, opt.exp_name, "Metrics")
     os.makedirs(result_dir, exist_ok=True)
     os.makedirs(config_dir, exist_ok=True)
@@ -37,17 +31,13 @@ def check_dirs(opt):
 
 def wrapper_query(query_dataset, digimon, result_dir):
     all_res = []
-
     dataset_len = len(query_dataset)
-    #dataset_len = 400 #TODO 减少测试集长度
-    dataset_len = min(len(query_dataset), 500)  # Remove limit, process complete dataset
-    
+    dataset_len = min(len(query_dataset), 500)
+
     for _, i in enumerate(range(dataset_len)):
         query = query_dataset[i]
-        # Add log output with question number
-        from Core.Common.Logger import logger
         logger.info(f"Processing question {i+1}/{dataset_len}...")
-        
+
         res = asyncio.run(digimon.query(query["question"]))
         query["output"] = res
         all_res.append(query)
@@ -67,12 +57,8 @@ async def wrapper_evaluation(path, opt, result_dir):
 
 
 if __name__ == "__main__":
-
-    # with open("./book.txt") as f:
-    #     doc = f.read()
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("-opt", type=str, help="Path to option YMAL file.")
+    parser.add_argument("-opt", type=str, help="Path to option YAML file.")
     parser.add_argument("-dataset_name", type=str, help="Name of the dataset.")
     args = parser.parse_args()
 
@@ -84,16 +70,7 @@ if __name__ == "__main__":
         data_dir=os.path.join(opt.data_root, opt.dataset_name)
     )
     corpus = query_dataset.get_corpus()
-    # corpus = corpus[:10] # Limit corpus size for testing
 
     asyncio.run(digimon.insert(corpus))
-
     save_path = wrapper_query(query_dataset, digimon, result_dir)
-
     asyncio.run(wrapper_evaluation(save_path, opt, result_dir))
-
-    # for train_item in dataloader:
-
-    # a = asyncio.run(digimon.query("Who is Fred Gehrke?"))
-
-    # asyncio.run(digimon.query("Who is Scrooge?"))

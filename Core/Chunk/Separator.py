@@ -78,7 +78,7 @@ class SeparatorSplitter:
         result = []
         for i in range(0, len(chunk), self._chunk_size - self._chunk_overlap):
             new_chunk = chunk[i:i + self._chunk_size]
-            if len(new_chunk) > self._chunk_overlap:  # 只有当 chunk 长度大于 overlap 时才添加
+            if len(new_chunk) > self._chunk_overlap:  # Only add when chunk length > overlap
                 result.append(new_chunk)
         return result
 

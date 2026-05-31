@@ -218,27 +218,21 @@ class Message(BaseModel):
 
 
 class UserMessage(Message):
-    """便于支持OpenAI的消息
-    Facilitate support for OpenAI messages
-    """
+    """Facilitate support for OpenAI message format"""
 
     def __init__(self, content: str):
         super().__init__(content=content, role="user")
 
 
 class SystemMessage(Message):
-    """便于支持OpenAI的消息
-    Facilitate support for OpenAI messages
-    """
+    """Facilitate support for OpenAI message format"""
 
     def __init__(self, content: str):
         super().__init__(content=content, role="system")
 
 
 class AIMessage(Message):
-    """便于支持OpenAI的消息
-    Facilitate support for OpenAI messages
-    """
+    """Facilitate support for OpenAI message format"""
 
     def __init__(self, content: str):
         super().__init__(content=content, role="assistant")

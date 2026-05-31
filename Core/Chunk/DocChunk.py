@@ -103,35 +103,25 @@ class DocChunk:
         logger.info("✅ Finished the chunking stage")
 
     async def update_chunks(self, incremental_docs: Union[str, List[str]]):
-        """
-        增量更新chunks：只处理新文档，不影响现有chunk数据
-        
-        Args:
-            incremental_docs: 新增的文档数据
-        """
-        logger.info(f"🔄 开始增量更新chunks，新增文档数量: {len(incremental_docs) if isinstance(incremental_docs, list) else 1}")
-        
-        # 确保现有chunk数据已加载
+        """Incrementally update chunks: only process new documents, preserve existing chunk data."""
+        logger.info(f"Incremental chunk update: {len(incremental_docs) if isinstance(incremental_docs, list) else 1} new docs")
+
         is_loaded = await self._load_chunk(force=False)
         if not is_loaded:
-            logger.warning("⚠️ 未找到现有chunk数据，将作为初始构建处理")
+            logger.warning("No existing chunk data found, treating as initial build")
             await self.build_chunks(incremental_docs, force=True)
             return
-        
-        # 获取当前chunk数量（用于统计）
+
         existing_chunks = await self.get_chunks()
         existing_count = len(existing_chunks) if existing_chunks else 0
-        logger.info(f"📚 现有chunk数量: {existing_count}")
-        
-        # 处理增量文档数据格式
+        logger.info(f"Existing chunk count: {existing_count}")
+
         if isinstance(incremental_docs, str):
             incremental_docs = [incremental_docs]
-        
-        # 记录原始文档数
+
         original_docs_count = len(incremental_docs)
-        logger.info(f"增量文档数: {original_docs_count}")
-        
-        # 转换为标准格式并去重
+        logger.info(f"Incremental doc count: {original_docs_count}")
+
         if isinstance(incremental_docs, list):
             if all(isinstance(doc, dict) for doc in incremental_docs):
                 new_docs = {
@@ -149,8 +139,7 @@ class DocChunk:
                     }
                     for doc in incremental_docs
                 }
-        
-        # 过滤已存在的文档（基于hash ID去重）
+
         existing_doc_ids = set()
         if existing_chunks:
             for chunk_item in existing_chunks:
@@ -158,37 +147,32 @@ class DocChunk:
                     chunk_key, chunk_obj = chunk_item
                     if hasattr(chunk_obj, 'doc_id'):
                         existing_doc_ids.add(chunk_obj.doc_id)
-        
-        # 只保留真正新增的文档
+
         truly_new_docs = {}
         for doc_id, doc_data in new_docs.items():
             if doc_id not in existing_doc_ids:
                 truly_new_docs[doc_id] = doc_data
             else:
-                logger.debug(f"跳过重复文档: {doc_id}")
-        
+                logger.debug(f"Skipping duplicate doc: {doc_id}")
+
         if not truly_new_docs:
-            logger.info("📝 没有真正新增的文档，跳过chunk更新")
+            logger.info("No truly new documents, skipping chunk update")
             return []
-        
-        logger.info(f"📝 过滤后真正新增文档数: {len(truly_new_docs)}")
-        
-        # 对新文档进行chunk分割
+
+        logger.info(f"Truly new docs after dedup: {len(truly_new_docs)}")
+
         flatten_list = list(truly_new_docs.items())
         docs_content = [doc[1]["content"] for doc in flatten_list]
         doc_keys = [doc[0] for doc in flatten_list]
         title_list = [doc[1]["title"] for doc in flatten_list]
-        
-        # Token化新文档
+
         tokens = self.token_model.encode_batch(docs_content, num_threads=16)
-        
-        # 记录token化信息
-        logger.info(f"新文档token化完成: {len(tokens)} 个文档")
+
+        logger.info(f"Tokenized {len(tokens)} docs")
         total_tokens = sum(len(token_list) for token_list in tokens)
         avg_tokens = total_tokens / len(tokens) if tokens else 0
-        logger.info(f"新文档总tokens: {total_tokens}, 平均tokens: {avg_tokens:.2f}")
-        
-        # 获取现有chunk的最大索引，确保新chunk索引不冲突
+        logger.info(f"New docs - total tokens: {total_tokens}, avg: {avg_tokens:.2f}")
+
         max_existing_index = -1
         if existing_chunks:
             for chunk_item in existing_chunks:
@@ -196,10 +180,9 @@ class DocChunk:
                     _, chunk_obj = chunk_item
                     if hasattr(chunk_obj, 'index') and chunk_obj.index is not None:
                         max_existing_index = max(max_existing_index, chunk_obj.index)
-        
-        logger.info(f"现有chunk最大索引: {max_existing_index}")
-        
-        # 使用相同的chunk配置进行分割
+
+        logger.info(f"Max existing chunk index: {max_existing_index}")
+
         new_chunks = await self.chunk_method(
             tokens,
             doc_keys=doc_keys,
@@ -208,39 +191,33 @@ class DocChunk:
             overlap_token_size=self.config.chunk_overlap_token_size,
             max_token_size=self.config.chunk_token_size,
         )
-        
-        # 重新分配索引，避免与现有chunk冲突
+
         next_index = max_existing_index + 1
         for chunk in new_chunks:
             chunk["index"] = next_index
             next_index += 1
-        
-        # 记录新chunk信息
+
         new_chunks_count = len(new_chunks)
-        logger.info(f"新增chunk数量: {new_chunks_count}")
-        logger.info(f"使用chunk配置 - max_size: {self.config.chunk_token_size}, overlap: {self.config.chunk_overlap_token_size}")
-        
-        # 分析新chunk分布
+        logger.info(f"New chunk count: {new_chunks_count}")
+        logger.info(f"Chunk config - max_size: {self.config.chunk_token_size}, overlap: {self.config.chunk_overlap_token_size}")
+
         if new_chunks:
             chunk_sizes = [chunk["tokens"] for chunk in new_chunks]
             avg_chunk_size = sum(chunk_sizes) / len(chunk_sizes)
             max_chunk_size = max(chunk_sizes)
             min_chunk_size = min(chunk_sizes)
-            logger.info(f"新chunk大小统计 - 平均: {avg_chunk_size:.2f}, 最小: {min_chunk_size}, 最大: {max_chunk_size}")
-        
-        # 将新chunks添加到存储中（不影响现有数据）
+            logger.info(f"New chunk sizes - avg: {avg_chunk_size:.2f}, min: {min_chunk_size}, max: {max_chunk_size}")
+
         for chunk in new_chunks:
             chunk["chunk_id"] = mdhash_id(chunk["content"], prefix="chunk-")
             await self._chunk.upsert(chunk["chunk_id"], TextChunk(**chunk))
-        
-        # 持久化更新后的数据
+
         await self._chunk.persist()
-        
-        # 最终统计
+
         updated_chunks = await self.get_chunks()
         final_count = len(updated_chunks) if updated_chunks else 0
-        logger.info(f"✅ 增量chunk更新完成")
-        logger.info(f"📊 chunk数量变化: {existing_count} -> {final_count} (+{final_count - existing_count})")
+        logger.info(f"Incremental chunk update complete")
+        logger.info(f"Chunk count change: {existing_count} -> {final_count} (+{final_count - existing_count})")
 
         return new_chunks
 
@@ -270,9 +247,8 @@ class DocChunk:
     async def get_data_by_index(self, index):
         chunk = await self._chunk.get_data_by_index(index)
         if chunk is None:
-            # 添加日志记录，方便调试
             from Core.Common.Logger import logger
-            logger.warning(f"⚠️ 索引 {index} 对应的chunk为空")
+            logger.warning(f"Chunk at index {index} is empty")
             return None
         return chunk.content
 

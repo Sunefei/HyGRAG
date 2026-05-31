@@ -42,7 +42,7 @@ def register_retriever_method(type, method_name):
     def decorator(func):
         """ Register a new chunking method """
         RETRIEVER_REGISTRY.register_retriever_method(type, method_name, func)
-        return func  # 修复：返回原函数
+        return func  # Fix: return the original function
 
     return decorator
 

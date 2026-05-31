@@ -80,7 +80,7 @@ class TreeGraphBalanced(BaseGraph):
                 n_clusters = len(mapping)
                 # import pdb
                 # pdb.set_trace()
-                cluster_sizes = np.bincount(new_labels, minlength=n_clusters)  # 更新簇大小
+                cluster_sizes = np.bincount(new_labels, minlength=n_clusters)
                 new_centers = np.array([embeddings[np.array(new_labels) == i].mean(axis=0) for i in range(n_clusters)])
                 return n_clusters, new_labels, new_centers, cluster_sizes
             
@@ -194,16 +194,16 @@ class TreeGraphBalanced(BaseGraph):
 
             clusters = await self._clustering(nodes = self._graph.get_layer(layer))
 
-            # 使用asyncio并发而不是ThreadPoolExecutor来避免event loop冲突
+            # Use asyncio concurrency instead of ThreadPoolExecutor to avoid event loop conflicts
             logger.info(f"Processing {len(clusters)} clusters using asyncio concurrency...")
-            
-            # 创建异步任务列表
+
+            # Create async task list
             async_tasks = []
             for cluster in clusters:
                 task = self._extract_cluster_relationship_without_embedding(layer + 1, cluster)
                 async_tasks.append(task)
             
-            # 使用asyncio.gather并发执行所有任务
+            # Use asyncio.gather to execute all tasks concurrently
             logger.info(f"Waiting for {len(async_tasks)} cluster tasks to complete...")
             await asyncio.gather(*async_tasks)
             logger.info(f"All {len(async_tasks)} cluster tasks completed successfully")
@@ -224,16 +224,16 @@ class TreeGraphBalanced(BaseGraph):
         else:
             self._graph.clear()  # clear the storage before rebuilding
             self._graph.add_layer()
-            # 使用asyncio并发而不是ThreadPoolExecutor来避免event loop冲突
+            # Use asyncio concurrency instead of ThreadPoolExecutor to avoid event loop conflicts
             logger.info(f"Processing {len(chunks)} chunks using asyncio concurrency...")
-            
-            # 创建异步任务列表
+
+            # Create async task list
             async_tasks = []
             for chunk in chunks:
                 task = self._extract_entity_relationship_without_embedding(chunk_key_pair=chunk)
                 async_tasks.append(task)
             
-            # 使用asyncio.gather并发执行所有任务
+            # Use asyncio.gather to execute all tasks concurrently
             logger.info(f"Waiting for {len(async_tasks)} leaf tasks to complete...")
             await asyncio.gather(*async_tasks)
             logger.info(f"All {len(async_tasks)} leaf tasks completed successfully")

@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-@Time    : 2024/11/01 00:57
-@File    : BaseLLM.py
-@Desc    : Refer to the MetaGPT https://github.com/geekan/MetaGPT/blob/main/metagpt/provider/base_llm.py
+@File    : BaseEmb.py
+@Desc    : Refer to the MetaGPT https://github.com/geekan/MetaGPT/blob/main/metagpt/provider/base_emb.py
 """
 from __future__ import annotations
 

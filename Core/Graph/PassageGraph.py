@@ -109,12 +109,12 @@ class PassageGraph(BaseGraph):
                     for task_1 in as_completed(tasks):
                         result = task_1.result()
                         results.append(result)
-                    # 每 save_interval 轮保存一次结果
+                    # Save results every save_interval rounds
                     if (i + 1) % save_interval == 0:
                         self._save_results(results, save_path)
                         print(f"Saved results at round {i + 1}")
 
-            # # 保存剩余的结果
+            # Save remaining results
             # if results:
             #     self._save_results(results, save_path)
             #     print("Final results saved.")
@@ -199,12 +199,12 @@ class PassageGraph(BaseGraph):
   
 
     def _save_results(self, results, save_path):
-        """将结果保存到文件"""
-        # 如果文件已存在，则加载旧结果并合并
-        # 保存结果
+        """Save results to file"""
+        # If file exists, load old results and merge
+        # Save results
         with open(save_path, "wb") as f:
             pickle.dump(results, f)
     def _load_results(self, save_path):
-        """从文件加载结果"""
+        """Load results from file"""
         with open(save_path, "rb") as f:
             return pickle.load(f)

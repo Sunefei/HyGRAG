@@ -17,9 +17,10 @@ from Core.Provider.BaseLLM import BaseLLM
 from Core.Provider.LLMProviderRegister import create_llm_instance
 
 
-nltk_path = "YOUR_OWN_NLTK_CACHE_PATH"
+nltk_path = None
 # add the nltk_path to the nltk.data.path
-nltk.data.path.append(nltk_path)
+if nltk_path:
+    nltk.data.path.append(nltk_path)
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -66,11 +67,11 @@ def meteor(p, g):
     return meteor_score([x.split() for x in g], p.split())
 
 
-# 创建 RougeScorer 实例，设置 ROUGE-L 指标
+# Create RougeScorer instance with ROUGE-L metric
 scorer = rouge_scorer.RougeScorer(["rougeL"], use_stemmer=True)
 
 
-# 计算 ROUGE-L 分数
+# Compute ROUGE-L score
 def rouge_l(p, g):
     if isinstance(g, list):
         g = g[0]
@@ -501,7 +502,7 @@ class Evaluator:
             max_text_length=512,
             verbose=True,
             batch_size=8,
-            featurize_model_name="/data/zhy/LLM/gpt2-large", #TODO ”gpt2-large“
+            featurize_model_name=”gpt2-large”,
         )
         return out.mauve * 100
 

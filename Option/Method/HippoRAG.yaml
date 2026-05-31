@@ -68,5 +68,3 @@ query:
 
     # For IR-COT
     max_ir_steps: 2
-    
- 

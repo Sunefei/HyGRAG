@@ -38,4 +38,3 @@ query:
     query_type: qa
     top_k: 30
     k_nei: 3
- 

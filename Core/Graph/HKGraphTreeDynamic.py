@@ -372,7 +372,7 @@ class HKDynamicAux:
         if self.use_member_based_signature and member_nodes:
             try:
                 signature = self.compute_community_signature_from_members(community_id, member_nodes)
-                if signature != 0:  # 确保计算成功
+                if signature != 0:  # Ensure calculation succeeded
                     self.signature_map[community_id] = signature
                     if community_id in self.node_aux:
                         self.node_aux[community_id].signature = signature
@@ -1539,7 +1539,7 @@ class HKGraphTreeDynamic(HKGraphTree):
                         best_parent = parent_community_id
             
             # If a suitable parent community is found and the similarity is high enough
-            if best_parent and best_similarity > 0.5:  # 使用相同的阈值
+            if best_parent and best_similarity > 0.5:  # Use same threshold
                 assignments[community_id] = best_parent
                 # Set parent-child relationships
                 self.aux.set_parent_child_relationship(best_parent, community_id)
@@ -1564,7 +1564,7 @@ class HKGraphTreeDynamic(HKGraphTree):
         if len(unassigned_communities) >= self.lsh_min_cluster_size:
             await self._create_new_communities_for_unassigned(unassigned_communities, upper_level-1)
         elif unassigned_communities:
-            # If the number of unassigned communities is not enough to create new communities, but又不为空
+            # Not enough unassigned communities to form new clusters
             # Consider reducing the threshold to re-assign, or waiting for more communities
             logger.info(f"Only {len(unassigned_communities)} unassigned communities, less than minimum cluster size {self.lsh_min_cluster_size}")
 

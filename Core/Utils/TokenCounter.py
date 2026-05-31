@@ -89,14 +89,14 @@ TOKEN_COSTS = {
     "doubao-pro-128k-240515": {"prompt": 0.0007, "completion": 0.0013},
     "llama3-70b-llama3-70b-instruct": {"prompt": 0.0, "completion": 0.0},
     "llama3-8b-llama3-8b-instruct": {"prompt": 0.0, "completion": 0.0},
-    "/data/zhy/llama3.1-8B-instruct": {"prompt": 0.0, "completion": 0.0},
+    "/path/to/llama3.1-8B-instruct": {"prompt": 0.0, "completion": 0.0},
     "llama3.1-instruct": {"prompt": 0.0, "completion": 0.0},
 }
 
 
 """
-QianFan Token Price https://cloud.baidu.com/doc/WENXINWORKSHOP/s/hlrk4akp7#tokens%E5%90%8E%E4%BB%98%E8%B4%B9
-Due to QianFan has multi price strategies, we unify `Tokens post-payment` as a statistical method.
+QianFan Token Price: https://cloud.baidu.com/doc/WENXINWORKSHOP/s/hlrk4akp7
+Due to QianFan having multiple price strategies, we unify `Tokens post-payment` as a statistical method.
 """
 QIANFAN_MODEL_TOKEN_COSTS = {
     "ERNIE-Bot-4": {"prompt": 0.017, "completion": 0.017},

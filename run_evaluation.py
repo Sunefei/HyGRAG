@@ -49,8 +49,8 @@ except ImportError as e:
     print("Close-set evaluation will use regex fallback mode")
     LLM_AVAILABLE = False
 
-# Set NLTK data path
-nltk_path = "/data/zhy/nltk_data"  # Adjust according to your environment
+# Set NLTK data path (adjust to your environment)
+nltk_path = os.environ.get("NLTK_DATA", os.path.expanduser("~/nltk_data"))
 nltk.data.path.append(nltk_path)
 
 try:
@@ -454,7 +454,7 @@ class RAGEvaluator:
         """
         print("Executing closed-set evaluation...")
         
-        # 检查必要的列
+        # Check required columns
         required_columns = ["question", "answer", "output"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -747,15 +747,16 @@ async def main():
                        help="Dataset name (e.g., Popqa, hotpotqa, etc.)")
     parser.add_argument("--output_dir", type=str, default="./evaluation_results",
                        help="Output directory (default: ./evaluation_results)")
-    parser.add_argument("--nltk_path", type=str, default="/data/zhy/nltk_data",
-                       help="NLTK data path")
+    parser.add_argument("--nltk_path", type=str, default=None,
+                       help="NLTK data path (default: ~/nltk_data)")
     
     args = parser.parse_args()
-    
+
     # Set NLTK path
-    global nltk_path
-    nltk_path = args.nltk_path
-    nltk.data.path.append(nltk_path)
+    if args.nltk_path:
+        global nltk_path
+        nltk_path = args.nltk_path
+        nltk.data.path.append(nltk_path)
     
     try:
         # Create evaluator

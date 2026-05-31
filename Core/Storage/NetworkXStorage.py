@@ -388,7 +388,7 @@ class NetworkXStorage(BaseGraphStorage):
         current_level = {start_node}
 
         for _ in range(k):
-            next_level = set()  # 下一层的节点
+            next_level = set()  # Nodes for next level
             for node in current_level:
                 neighbors = set(await self.neighbors(node))
                 next_level.update(neighbors - visited)

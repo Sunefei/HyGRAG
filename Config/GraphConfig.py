@@ -16,7 +16,7 @@ class GraphConfig(YamlModel):
     enable_edge_description: bool = False
     enable_edge_name: bool = False
     prior_prob: float = 0.8
-    use_wat_linking: bool = False  # 是否使用WAT实体链接系统
+    use_wat_linking: bool = False  # Enable WAT entity linking system
     enable_edge_keywords: bool = False
     # Graph clustering
     use_community: bool = False  # Default to False
@@ -62,12 +62,12 @@ class GraphConfig(YamlModel):
     lsh_min_cluster_size: int = 5
     lsh_max_cluster_size: int = 50
     
-    # 层次化配置
+    # Hierarchical configuration
     max_hierarchy_levels: int = 4
     community_summary_length: int = 300
     max_concurrent_summaries: int = 35
     
-    # Chunk-Chunk连接设置
+    # Chunk-Chunk connection settings
     shared_entity_threshold: int = 1
 
     # FAISS config

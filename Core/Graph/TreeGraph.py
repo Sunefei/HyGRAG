@@ -22,59 +22,59 @@ from sklearn.mixture import BayesianGaussianMixture
 import multiprocessing as mp
 
 class TreeGraph(BaseGraph):
-    max_workers: int = 48  # 增加到48个worker
-    leaf_workers: int = 56  # 增加到56个worker
+    max_workers: int = 48  # Increased to 48 workers
+    leaf_workers: int = 56  # Increased to 56 workers
     def __init__(self, config, llm, encoder):
         super().__init__(config, llm, encoder)
         self._graph: TreeGraphStorage = TreeGraphStorage()  # Tree index
         self.embedding_model = get_rag_embedding(config.embedding.api_type, config)  # Embedding model
         self.config = config.graph # Only keep the graph config
         random.seed(self.config.random_seed)
-        # 设置joblib的并行度
+        # Set joblib parallelism
         self.n_jobs = min(48, mp.cpu_count())
 
     def _parallel_gmm_fit(self, embeddings, n_components, random_state):
-        """拟合GMM模型"""
+        """Fit GMM model"""
         gm = GaussianMixture(
-            n_components=n_components, 
+            n_components=n_components,
             random_state=random_state,
-            n_init=3,  # 减少初始化次数以提高速度
-            max_iter=100,  # 限制最大迭代次数
-            tol=1e-3,  # 稍微放宽收敛条件
-            init_params='kmeans'  # 使用kmeans初始化，通常更快
+            n_init=3,  # Reduce init attempts for speed
+            max_iter=100,  # Limit max iterations
+            tol=1e-3,  # Relaxed convergence tolerance
+            init_params='kmeans'  # Use kmeans init, usually faster
         )
         gm.fit(embeddings)
         return gm
 
     def _compute_bic_for_n_components(self, embeddings, n_components, random_state):
-        """计算单个聚类数的BIC值"""
+        """Compute BIC for a single cluster count"""
         gm = self._parallel_gmm_fit(embeddings, n_components, random_state)
         return n_components, gm.bic(embeddings)
 
     def _parallel_bic_computation(self, embeddings, n_clusters_range, random_state):
-        """使用多线程计算BIC值"""
+        """Compute BIC using multithreading"""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         
         results = []
         with ThreadPoolExecutor(max_workers=min(self.n_jobs, len(n_clusters_range))) as executor:
-            # 提交所有任务
+            # Submit all tasks
             future_to_n = {
                 executor.submit(self._compute_bic_for_n_components, embeddings, n, random_state): n 
                 for n in n_clusters_range
             }
             
-            # 收集结果
+            # Collect results
             for future in as_completed(future_to_n):
                 n_components, bic_value = future.result()
                 results.append((n_components, bic_value))
         
-        # 按n_components排序
+        # Sort by n_components
         results.sort(key=lambda x: x[0])
         n_clusters_list, bics = zip(*results)
         return list(n_clusters_list), list(bics)
 
     async def _GMM_cluster(self, embeddings: np.ndarray, threshold: float, random_state: int = 0):
-        """优化的GMM聚类方法"""
+        """Optimized GMM clustering method"""
         if len(embeddings) > self.config.threshold_cluster_num:
             max_clusters = len(embeddings) // 100
             n_clusters = np.arange(max_clusters - 1, max_clusters)
@@ -82,11 +82,11 @@ class TreeGraph(BaseGraph):
             max_clusters = min(50, len(embeddings))
             n_clusters = np.arange(1, max_clusters)
         
-        # 并行计算BIC值
+        # Compute BIC in parallel
         n_clusters_list, bics = self._parallel_bic_computation(embeddings, n_clusters, random_state)
         optimal_clusters = n_clusters_list[np.argmin(bics)]
 
-        # 使用最优聚类数拟合最终模型
+        # Fit final model with optimal cluster count
         gm = self._parallel_gmm_fit(embeddings, optimal_clusters, random_state)
         probs = gm.predict_proba(embeddings)
         labels = [np.where(prob > threshold)[0] for prob in probs]
@@ -121,12 +121,12 @@ class TreeGraph(BaseGraph):
             local_clusters = [np.array([0]) for _ in global_cluster_embeddings_]
             n_local_clusters = 1
         else:
-            # 优化UMAP参数以提高速度
+            # Optimize UMAP params for speed
             reduced_embeddings_local = umap.UMAP(
-                n_neighbors=min(10, len(global_cluster_embeddings_) - 1), 
-                n_components=dim, 
+                n_neighbors=min(10, len(global_cluster_embeddings_) - 1),
+                n_components=dim,
                 metric=self.config.cluster_metric,
-                low_memory=False,  # 启用低内存模式
+                low_memory=False,  # Enable low memory mode
                 random_state=42
             ).fit_transform(global_cluster_embeddings_)
             
@@ -141,7 +141,7 @@ class TreeGraph(BaseGraph):
     ) -> List[np.ndarray]:
         logger.info("Length of embeddings: {length}".format(length=len(embeddings)))
         logger.info("Starting UMAP")
-        # 优化UMAP参数
+        # Optimize UMAP params
         n_neighbors = min(int((len(embeddings) - 1) ** 0.5), len(embeddings) - 1)
         n_components = min(dim, len(embeddings) - 2)
         
@@ -149,7 +149,7 @@ class TreeGraph(BaseGraph):
             n_neighbors=n_neighbors, 
             n_components=n_components, 
             metric=self.config.cluster_metric,
-            low_memory=False,  # 启用低内存模式
+            low_memory=False,  # Enable low memory mode
             random_state=42
         ).fit_transform(embeddings)
 
@@ -169,9 +169,9 @@ class TreeGraph(BaseGraph):
 
         completed_list = []
 
-        # 优化线程池使用
+        # Optimize thread pool usage
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-            # 创建所有任务
+            # Create all tasks
             cluster_tasks = [
                 pool.submit(
                     self._create_task_with_return(self._process_cluster),
@@ -183,7 +183,7 @@ class TreeGraph(BaseGraph):
                 ) for i in range(n_global_clusters)
             ]
             
-            # 等待所有任务完成
+            # Wait for all tasks to complete
             completed_list = list(as_completed(cluster_tasks))
 
         for task in completed_list:
@@ -349,16 +349,16 @@ class TreeGraph(BaseGraph):
                 verbose = self.config.verbose,
             )
 
-            # 使用asyncio并发而不是ThreadPoolExecutor来避免event loop冲突
+            # Use asyncio concurrency instead of ThreadPoolExecutor to avoid event loop conflicts
             logger.info(f"Processing {len(clusters)} clusters using asyncio concurrency...")
-            
-            # 创建异步任务列表
+
+            # Create async task list
             async_tasks = []
             for cluster in clusters:
                 task = self._extract_cluster_relationship_without_embedding(layer + 1, cluster)
                 async_tasks.append(task)
             
-            # 使用asyncio.gather并发执行所有任务
+            # Use asyncio.gather to execute all tasks concurrently
             logger.info(f"Waiting for {len(async_tasks)} cluster tasks to complete...")
             await asyncio.gather(*async_tasks)
             logger.info(f"All {len(async_tasks)} cluster tasks completed successfully")
@@ -381,16 +381,16 @@ class TreeGraph(BaseGraph):
         else:
             self._graph.clear()  # clear the storage before rebuilding
             self._graph.add_layer()
-            # 使用asyncio并发而不是ThreadPoolExecutor来避免event loop冲突
+            # Use asyncio concurrency instead of ThreadPoolExecutor to avoid event loop conflicts
             logger.info(f"Processing {len(chunks)} chunks using asyncio concurrency...")
-            
-            # 创建异步任务列表
+
+            # Create async task list
             async_tasks = []
             for chunk in chunks:
                 task = self._extract_entity_relationship_without_embedding(chunk_key_pair=chunk)
                 async_tasks.append(task)
             
-            # 使用asyncio.gather并发执行所有任务
+            # Use asyncio.gather to execute all tasks concurrently
             logger.info(f"Waiting for {len(async_tasks)} leaf tasks to complete...")
             await asyncio.gather(*async_tasks)
             logger.info(f"All {len(async_tasks)} leaf tasks completed successfully")

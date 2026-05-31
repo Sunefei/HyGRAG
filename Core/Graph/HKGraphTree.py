@@ -57,7 +57,7 @@ class HKGraphTree(BaseGraph):
         self.lsh_max_cluster_size = getattr(config, 'lsh_max_cluster_size', 50)
         self.max_hierarchy_levels = getattr(config, 'max_hierarchy_levels', 4)
         self.community_summary_length = getattr(config, 'community_summary_length', 300)
-        self.max_concurrent_summaries = getattr(config, 'max_concurrent_summaries', 35)  # 控制生成摘要并发度
+        self.max_concurrent_summaries = getattr(config, 'max_concurrent_summaries', 35)  # Control summary generation concurrency
         
         # Initialize hierarchy storage
         self.node_embeddings = {}
@@ -314,7 +314,7 @@ class HKGraphTree(BaseGraph):
             chunk_entity = HK_Node(
                 entity_name=f"CHUNK_{chunk_key}",
                 entity_type="CHUNK",
-                description=chunk_info.content,  # 保留完整的chunk内容
+                description=chunk_info.content,
                 source_id=chunk_key
             )
             chunk_nodes[f"CHUNK_{chunk_key}"].append(chunk_entity)
@@ -339,8 +339,8 @@ class HKGraphTree(BaseGraph):
         logger.info("🛠️ Creating Chunk-Chunk connections")
         chunk_chunk_relationships = defaultdict(list)
         
-        # 首先统计每对chunk之间的共享实体
-        chunk_pair_shared_entities = defaultdict(list)  # (chunk1, chunk2) -> [shared_entities]
+        # Count shared entities between each chunk pair
+        chunk_pair_shared_entities = defaultdict(list)
         
         for wiki_entity, chunk_keys in wiki_entities_map.items():
             if len(chunk_keys) < 2:
@@ -351,25 +351,21 @@ class HKGraphTree(BaseGraph):
                 chunk_pair = tuple(sorted([chunk1, chunk2]))
                 chunk_pair_shared_entities[chunk_pair].append(wiki_entity)
         
-        # 设置共享实体阈值，可通过配置文件设置
         shared_entity_threshold = getattr(self.config, 'shared_entity_threshold', 2)
         logger.info(f"Using shared entity threshold: {shared_entity_threshold}")
-        
-        # 只为共享实体数量 >= 阈值的chunk pair创建连接
         for (chunk1, chunk2), shared_entities in chunk_pair_shared_entities.items():
             if len(shared_entities) < shared_entity_threshold:
                 continue
             
             rel_key = tuple(sorted([f"CHUNK_{chunk1}", f"CHUNK_{chunk2}"]))
             
-            # 创建包含所有共享实体信息的关系
             relationship = Relationship(
                 src_id=rel_key[0],
                 tgt_id=rel_key[1],
                 relation_name="SHARED_ENTITY",
                 description=f"Chunks connected through shared entities: {', '.join(shared_entities)}",
                 source_id=GRAPH_FIELD_SEP.join([chunk1, chunk2] + shared_entities),
-                weight=float(len(shared_entities))  # 权重设为共享实体数量
+                weight=float(len(shared_entities))
             )
             chunk_chunk_relationships[rel_key].append(relationship)
             
@@ -386,7 +382,7 @@ class HKGraphTree(BaseGraph):
         all_edges = {**all_relationships, **entity_chunk_relationships, **chunk_chunk_relationships}
         await asyncio.gather(*[self._merge_edges_then_upsert(k[0], k[1], v) for k, v in all_edges.items()])
         
-        # 分别统计节点和边的数量
+        # Count nodes and edges separately
         num_entities = len(all_entities)
         num_chunks = len(chunk_nodes)
         num_relationships = len(all_relationships)
@@ -1347,7 +1343,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
         logger.info(f"Initialized {n_nodes} node embeddings using text content")
         return embeddings
 
-    async def get_hierarchy_info(self) -> Dict[str, Any]: #TODO 打印层次信息debug
+    async def get_hierarchy_info(self) -> Dict[str, Any]: # TODO: print hierarchy info for debugging
         """
         Get information about the built hierarchy.
         """
@@ -1745,7 +1741,7 @@ Provide a concise but comprehensive summary (max {self.community_summary_length}
                 }
                 
                 if node_id.startswith('CHUNK_'):
-                    # Chunk节点信息
+                    # Chunk node info
                     chunk_key = node_id.replace('CHUNK_', '')
                     chunk_content = await self._get_chunk_original_content(chunk_key, node_id)
                     node_info.update({

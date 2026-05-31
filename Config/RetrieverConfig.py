@@ -19,14 +19,14 @@ class RetrieverConfig(YamlModel):
     global_max_consider_community: int = 512
     global_min_community_rating: float = 0.0
     
-    # HK Graph PPR 特定参数
+    # HK Graph PPR specific parameters
     enable_hybrid_ppr: bool = True
     ppr_iterations: int = 3
     enable_direct_chunk_ppr: bool = True
     enable_hybrid_ppr_method: bool = True
     enable_comprehensive_ppr: bool = True
     
-    # PPR 权重配置
+    # PPR weight configuration
     entity_weight: float = 0.4
     chunk_weight: float = 0.3
     relationship_weight: float = 0.3
@@ -34,11 +34,11 @@ class RetrieverConfig(YamlModel):
     entity_derived_weight: float = 0.3
     relationship_derived_weight: float = 0.3
     
-    # # 实体和关系 token 限制
+    # Entity and relation token limits
     # entities_max_tokens: int = 2000
     # relationships_max_tokens: int = 2000
     
-    # 其他检索器配置
+    # Other retriever configuration
     use_community: bool = False
     use_keywords: bool = False
     tree_search: bool = False
@@ -49,7 +49,7 @@ class RetrieverConfig(YamlModel):
     # community_boost_factor: float = 1.2
     hk_tree_retrieval_method: str = "hk_tree_flat_search"
     
-    # 树搜索特定设置
+    # Tree search specific settings
     max_communities_per_level: int = 5
     max_expansion_depth: int = 3
     community_relevance_threshold: float = 0.3

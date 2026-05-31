@@ -369,38 +369,11 @@ class BaseGraph(ABC):
     def get_induced_subgraph(self, nodes: list[str]):
         return self._graph.get_induced_subgraph(nodes)
 
-    # async def get_entities_to_relationships_map(self, is_directed=False):
-    #     if self.node_num == 0:
-    #         return csr_matrix((0, 0))
-
-    #     node_neighbors = {node: list(await self._graph.neighbors(node)) for node in await self._graph.nodes()}
-
-    #     # Construct the row and column indices for the CSR matrix
-    #     data = []
-    #     for node, neighbors in node_neighbors.items():
-    #         for neighbor in neighbors:
-    #             # Get the edge index (assuming edge indices are unique)
-    #             edge_index = self._graph.get_edge_index(node, neighbor)
-    #             if edge_index == -1: continue
-    #             node_index = await self._graph.get_node_index(node)
-    #             data.append([node_index, edge_index])
-    #             if not is_directed:
-    #                 neighbor_index = await self._graph.get_node_index(neighbor)
-    #                 data.append([neighbor_index, edge_index])
-
-    #     # Get the number of nodes and edges
-    #     node_count = self.node_num
-    #     edge_count = self.edge_num
-    #     # Construct the CSR matrix
-    #     return csr_from_indices(data, shape=(node_count, edge_count))
-
     async def get_entities_to_relationships_map(self, is_directed=False, show_progress: bool = False):
-        # 快速路径
         num_nodes = self.node_num
         if num_nodes == 0:
             return csr_matrix((0, 0))
 
-        # 一次性取出节点与边，并建立 O(1) 索引
         nodes = list(await self._graph.nodes())
         node_to_idx = {n: i for i, n in enumerate(nodes)}
         edges = list(await self._graph.edges())
@@ -430,18 +403,6 @@ class BaseGraph(ABC):
         for edge in await self.edges_data(False):
             lists_of_attrs.append(edge[key])
         return lists_of_attrs
-
-    # async def get_relationships_to_chunks_map(self, doc_chunk):
-    #     raw_relationships_to_chunks = await self.get_relationships_attrs(key="source_id")
-    #     # Map Chunk IDs to indices
-
-    #     raw_relationships_to_chunks = [
-    #         [i for i in await doc_chunk.get_index_by_merge_key(chunk_ids) if i is not None]
-    #         for chunk_ids in raw_relationships_to_chunks
-    #     ]
-    #     return csr_from_indices_list(
-    #         raw_relationships_to_chunks, shape=(len(raw_relationships_to_chunks), await doc_chunk.size)
-    #     )
 
     async def get_relationships_to_chunks_map(self, doc_chunk, show_progress: bool = False):
         raw_relationships_to_chunks = await self.get_relationships_attrs(key="source_id")
@@ -474,16 +435,12 @@ class BaseGraph(ABC):
     async def personalized_pagerank(self, reset_prob_chunk, damping: float = 0.1):
         pageranked_probabilities = []
         igraph_ = ig.Graph.from_networkx(self._graph.graph)
-        #igraph_.es['weight'] = [await self.get_edge_weight(edge[0], edge[1]) for edge in list(await self.edges())] TODO: 优化：批量获取边权重而不是逐个异步调用
-        # 优化：批量获取边权重而不是逐个异步调用
         edges_list = list(await self.edges())
-        if len(edges_list) > 1000:  # 如果边数量过多，使用简化权重
+        if len(edges_list) > 1000:
             from Core.Common.Logger import logger
-            logger.info(f"⚡ 图包含 {len(edges_list)} 条边，使用优化的权重计算...")
-            # 对于大图，使用统一权重避免性能问题
+            logger.info(f"Graph has {len(edges_list)} edges, using uniform weights...")
             igraph_.es['weight'] = [1.0] * len(edges_list)
         else:
-            # 对于小图，使用精确权重
             edge_weights = await asyncio.gather(
                 *[self.get_edge_weight(edge[0], edge[1]) for edge in edges_list]
             )

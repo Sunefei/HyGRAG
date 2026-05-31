@@ -81,5 +81,3 @@ query:
     global_special_community_map_llm_kwargs: {"response_format": {"type": "json_object"}}
     # For IR-COT
     max_ir_steps: 2
-    
- 

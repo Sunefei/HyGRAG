@@ -275,8 +275,8 @@ class HKGraphTreeStorage(BaseGraphStorage):
             hierarchy_nodes = await self._get_hierarchy_nodes_data()
             all_nodes_data.extend(hierarchy_nodes)
         
-        logger.info(f"📊 总共准备 {len(all_nodes_data)} 个节点用于entities_vdb: "
-                   f"基础节点 {len(base_nodes)}, 层次节点 {len(hierarchy_nodes) if self._hierarchy_data else 0}")
+        logger.info(f"Total {len(all_nodes_data)} nodes prepared for entities_vdb: "
+                   f"base nodes {len(base_nodes)}, hierarchy nodes {len(hierarchy_nodes) if self._hierarchy_data else 0}")
         
         return all_nodes_data
 
@@ -366,7 +366,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
             children_count = len(children)
             
             # Build the summary node content
-            #content_parts = [f"社区摘要 {community_id}"]
+            #content_parts = [f"community summary {community_id}"]
             content_parts = []
             if summary_text and summary_text.strip():
                 content_parts.append(summary_text.strip())
@@ -582,7 +582,7 @@ class HKGraphTreeStorage(BaseGraphStorage):
         current_level = {start_node}
 
         for _ in range(k):
-            next_level = set()  # 下一层的节点
+            next_level = set()  # Nodes for next level
             for node in current_level:
                 neighbors = set(await self.neighbors(node))
                 next_level.update(neighbors - visited)
